@@ -56,10 +56,11 @@ https://seu-backend.railway.app
 ```
 *(Substitua `seu-backend.railway.app` pela URL do seu backend no Railway)*
 
-**VITE_WS_PORT:**
+**VITE_WS_PORT:** (Opcional - apenas para desenvolvimento local)
 ```
 5001
 ```
+*(Em produção, o WebSocket usa a mesma URL do backend no path `/ws`)*
 
 ### Passo 4: Deploy
 
@@ -99,7 +100,7 @@ dist
 
 Adicione no Netlify:
 - `VITE_API_URL` = `https://seu-backend.railway.app`
-- `VITE_WS_PORT` = `5001`
+- `VITE_WS_PORT` = `5001` (Opcional - apenas para desenvolvimento local)
 
 ---
 
