@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Copy, Send, Bot, User as UserIcon } from 'lucide-react';
+import { X, Copy, Send, Bot, User as UserIcon, Briefcase, Volume2 } from 'lucide-react';
 import Button from './ui/Button';
 import api from '../lib/axios';
 import toast from 'react-hot-toast';
+import LeadModal from './modals/LeadModal';
 
 const ChatModal = ({ phone, isOpen, onClose }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [showLeadModal, setShowLeadModal] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -30,9 +32,29 @@ const ChatModal = ({ phone, isOpen, onClose }) => {
 
   const loadHistory = async () => {
     try {
-      const response = await api.get(`/api/conversations/${phone}/history`);
+      const response = await api.get(`/api/conversations/${phone}`);
       if (response.data.success) {
-        setHistory(response.data.history);
+        // Separar cada registro em duas mensagens (user e ai)
+        const messages = [];
+        (response.data.history || []).forEach((record) => {
+          if (record.user_message) {
+            messages.push({
+              user_message: record.user_message,
+              timestamp: record.timestamp,
+              type: 'user'
+            });
+          }
+          if (record.ai_response) {
+            messages.push({
+              ai_response: record.ai_response,
+              timestamp: record.timestamp,
+              type: 'ai'
+            });
+          }
+        });
+        // Ordenar por timestamp
+        messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        setHistory(messages);
       }
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
@@ -109,12 +131,23 @@ const ChatModal = ({ phone, isOpen, onClose }) => {
               {history.length} mensagens
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <X size={24} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowLeadModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Briefcase size={16} />
+              Criar Lead
+            </Button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <X size={24} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -148,8 +181,11 @@ const ChatModal = ({ phone, isOpen, onClose }) => {
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words">
-                    {msg.user_message || msg.ai_response}
+                  <p className="whitespace-pre-wrap break-words flex items-start gap-2">
+                    {msg.user_message && msg.user_message.startsWith('[ÁUDIO]') && (
+                      <Volume2 size={16} className={`flex-shrink-0 mt-0.5 ${msg.user_message ? 'text-primary-100' : 'text-blue-500'}`} title="Mensagem de áudio" />
+                    )}
+                    <span>{msg.user_message || msg.ai_response}</span>
                   </p>
                   <div className="flex items-center justify-between mt-2">
                     <span
@@ -209,10 +245,21 @@ const ChatModal = ({ phone, isOpen, onClose }) => {
               {sending ? 'Enviando...' : 'Enviar'}
             </Button>
           </div>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-};
 
-export default ChatModal;
+        {/* Modal de Lead */}
+        <LeadModal
+          isOpen={showLeadModal}
+          onClose={() => setShowLeadModal(false)}
+          lead={{ phone: phone.replace('@c.us', '').replace(/\D/g, '') }}
+          onSuccess={() => {
+            toast.success('Lead criado com sucesso!');
+            setShowLeadModal(false);
+          }}
+        />
+      </div>
+    );
+  };
+
+  export default ChatModal;

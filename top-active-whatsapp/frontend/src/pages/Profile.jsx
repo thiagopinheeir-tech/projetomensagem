@@ -26,19 +26,8 @@ const Profile = () => {
         phone: user.phone || '',
         email: user.email || '',
       });
-    } else {
-      getProfile().then((profileUser) => {
-        if (profileUser) {
-          setFormData({
-            full_name: profileUser.full_name || '',
-            company_name: profileUser.company_name || '',
-            phone: profileUser.phone || '',
-            email: profileUser.email || '',
-          });
-        }
-      });
     }
-  }, [user, getProfile]);
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

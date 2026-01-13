@@ -1,4 +1,4 @@
-const Input = ({ label, error, className = '', ...props }) => {
+const Input = ({ label, error, className = '', helpText, ...props }) => {
   return (
     <div className="w-full">
       {label && (
@@ -19,6 +19,9 @@ const Input = ({ label, error, className = '', ...props }) => {
         `}
         {...props}
       />
+      {helpText && (
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{helpText}</p>
+      )}
       {error && (
         <p className="mt-1 text-sm text-red-500">{error}</p>
       )}

@@ -10,6 +10,10 @@ import Conversations from './pages/Conversations';
 import Profile from './pages/Profile';
 import ChatbotSettings from './pages/ChatbotSettings';
 import APIManager from './pages/APIManager';
+import CRM from './pages/CRM';
+import Automatizations from './pages/Automatizations';
+import Settings from './pages/Settings';
+import WhatsAppConnection from './pages/WhatsAppConnection';
 import { useAuth } from './hooks/useAuth';
 
 // Componente de rota protegida
@@ -155,6 +159,26 @@ function App() {
           />
 
           <Route
+            path="/automatizations"
+            element={
+              <ProtectedRoute>
+                <div className="flex h-screen overflow-hidden">
+                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <Navbar
+                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      isSidebarOpen={isSidebarOpen}
+                    />
+                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+                      <Automatizations />
+                    </main>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/api-manager"
             element={
               <ProtectedRoute>
@@ -187,6 +211,66 @@ function App() {
                     />
                     <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
                       <Profile />
+                    </main>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/crm"
+            element={
+              <ProtectedRoute>
+                <div className="flex h-screen overflow-hidden">
+                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <Navbar
+                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      isSidebarOpen={isSidebarOpen}
+                    />
+                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+                      <CRM />
+                    </main>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <div className="flex h-screen overflow-hidden">
+                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <Navbar
+                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      isSidebarOpen={isSidebarOpen}
+                    />
+                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+                      <Settings />
+                    </main>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/whatsapp-connection"
+            element={
+              <ProtectedRoute>
+                <div className="flex h-screen overflow-hidden">
+                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <Navbar
+                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      isSidebarOpen={isSidebarOpen}
+                    />
+                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+                      <WhatsAppConnection />
                     </main>
                   </div>
                 </div>

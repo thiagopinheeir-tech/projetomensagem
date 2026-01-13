@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Bot, Save, Settings, MessageSquare, TrendingUp, Users, Power } from 'lucide-react';
+import { Bot, Save, Settings, MessageSquare, Briefcase, Power } from 'lucide-react';
 import Card from '../components/ui/Card';
-import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import api from '../lib/axios';
@@ -11,6 +10,10 @@ const ChatbotSettings = () => {
   const [loading, setLoading] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [chatbotEnabled, setChatbotEnabled] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [promptOnlyMode, setPromptOnlyMode] = useState(true);
   const [config, setConfig] = useState({
     businessName: '',
     businessDescription: '',
@@ -29,9 +32,55 @@ const ChatbotSettings = () => {
     }
   });
 
+  // Template variables removidas - tudo fica direto no prompt único
+
   useEffect(() => {
-    loadConfig();
+    (async () => {
+      await loadTemplates();
+      await loadConfig();
+    })();
   }, []);
+
+  // Carregar prompt automaticamente ao selecionar template
+  useEffect(() => {
+    if (selectedTemplateKey) {
+      loadTemplatePrompt(selectedTemplateKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTemplateKey]);
+
+  const loadTemplatePrompt = async (templateKey) => {
+    if (!templateKey) return;
+    try {
+      const response = await api.get(`/api/chatbot/templates/${templateKey}/prompt`);
+      if (response.data.success && response.data.prompt) {
+        setConfig(prev => ({
+          ...prev,
+          specialInstructions: response.data.prompt
+        }));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar prompt do template:', error);
+      // Não mostrar erro ao usuário (pode ser template sem arquivo)
+    }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      setLoadingTemplates(true);
+      const response = await api.get('/api/chatbot/templates');
+      if (response.data.success) {
+        setTemplates(response.data.templates || []);
+        const first = response.data.templates?.[0]?.template_key;
+        if (first && !selectedTemplateKey) setSelectedTemplateKey(first);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar templates:', error);
+      toast.error('Erro ao carregar tipos de negócio (templates)');
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
 
   const loadConfig = async () => {
     try {
@@ -57,6 +106,7 @@ const ChatbotSettings = () => {
             teste: cfg.defaultResponses?.teste || ''
           }
         });
+        setPromptOnlyMode(cfg.promptOnlyMode !== undefined ? !!cfg.promptOnlyMode : true);
         setChatbotEnabled(response.data.enabled || false);
       }
     } catch (error) {
@@ -69,23 +119,34 @@ const ChatbotSettings = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    
+    if (!selectedTemplateKey) {
+      toast.error('Selecione um tipo de negócio (template)');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const payload = {
-        ...config,
-        services: config.services.split(',').map(s => s.trim()).filter(s => s),
-        defaultResponses: config.defaultResponses
+        templateKey: selectedTemplateKey,
+        promptOnlyMode,
+        specialInstructions: config.specialInstructions,
+        model: config.model,
+        temperature: config.temperature,
+        maxTokens: config.maxTokens
       };
 
-      const response = await api.put('/api/chatbot/config', payload);
+      const response = await api.post('/api/chatbot/profiles/save', payload);
 
       if (response.data.success) {
-        toast.success('Configuração salva com sucesso!');
+        toast.success('Configuração salva e ativada com sucesso!');
+        await loadConfig();
       }
     } catch (error) {
-      toast.error('Erro ao salvar configuração');
-      console.error(error);
+      const errorMessage = error.response?.data?.message || 'Erro ao salvar configuração';
+      toast.error(errorMessage);
+      console.error('Erro ao salvar:', error.response?.data || error);
     } finally {
       setLoading(false);
     }
@@ -120,6 +181,8 @@ const ChatbotSettings = () => {
       setConfig(prev => ({ ...prev, [field]: value }));
     }
   };
+
+  // handleVarChange removido - não usamos mais variáveis do template
 
   if (loadingConfig) {
     return (
@@ -157,78 +220,74 @@ const ChatbotSettings = () => {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Informações da Empresa */}
-        <Card title="Informações da Empresa" icon={Bot}>
-          <div className="space-y-4">
-            <Input
-              label="Nome da Empresa"
-              value={config.businessName}
-              onChange={(e) => handleChange('businessName', e.target.value)}
-              placeholder="JT DEV NOCODE"
-              required
-            />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Descrição da Empresa
-              </label>
-              <textarea
-                value={config.businessDescription}
-                onChange={(e) => handleChange('businessDescription', e.target.value)}
-                placeholder="Descreva sua empresa e o que você oferece..."
-                rows={4}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
-                required
-              />
-            </div>
-
-            <Input
-              label="Serviços/Produtos (separados por vírgula)"
-              value={config.services}
-              onChange={(e) => handleChange('services', e.target.value)}
-              placeholder="Agendamento, CRM, Chatbot IA, Relatórios"
-              required
-            />
+        {/* Tipo de Negócio */}
+        <Card title="Tipo de Negócio" icon={Briefcase}>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Selecione o tipo de negócio
+            </label>
+            <select
+              value={selectedTemplateKey}
+              onChange={(e) => setSelectedTemplateKey(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              disabled={loadingTemplates}
+            >
+              <option value="">Selecione um tipo...</option>
+              {templates.map(t => (
+                <option key={t.template_key} value={t.template_key}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Ao selecionar, o prompt será carregado automaticamente. Você pode editá-lo antes de salvar.
+            </p>
           </div>
         </Card>
 
-        {/* Configurações de IA */}
-        <Card title="Configurações de IA" icon={Settings}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Modelo GPT
+        {/* Prompt Único (robusto) */}
+        <Card title="Prompt (Único e Completo)" icon={MessageSquare}>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Com o <span className="font-medium">Modo Prompt Único</span> ligado, este texto vira o <span className="font-medium">System Prompt completo</span>.
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Edite o prompt diretamente e inclua todas as informações do seu negócio (endereço, horários, preços, etc.).
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={promptOnlyMode}
+                  onChange={(e) => setPromptOnlyMode(e.target.checked)}
+                />
+                Modo Prompt Único
               </label>
-              <select
-                value={config.model}
-                onChange={(e) => handleChange('model', e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tom de Voz
-              </label>
-              <select
-                value={config.tone}
-                onChange={(e) => handleChange('tone', e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                <option value="formal">Formal</option>
-                <option value="amigavel">Amigável</option>
-                <option value="informal">Informal</option>
-                <option value="vendedor">Vendedor</option>
-              </select>
+              <textarea
+                value={config.specialInstructions}
+                onChange={(e) => handleChange('specialInstructions', e.target.value)}
+                placeholder="Cole aqui seu prompt completo (regras, tom, funil de atendimento, etc.)"
+                rows={18}
+                className="w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Dica: se quiser um atendimento super consistente, inclua regras de CTA, limites, e passos do funil no próprio prompt.
+              </p>
             </div>
+          </div>
+        </Card>
 
+        {/* Configurações Técnicas de IA */}
+        <Card title="Configurações Técnicas de IA" icon={Settings}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Temperatura ({config.temperature})
               </label>
               <input
@@ -245,75 +304,26 @@ const ChatbotSettings = () => {
               </p>
             </div>
 
-            <Input
-              label="Máximo de Tokens"
-              type="number"
-              value={config.maxTokens}
-              onChange={(e) => handleChange('maxTokens', parseInt(e.target.value))}
-              min={50}
-              max={1000}
-              required
-            />
-          </div>
-        </Card>
-
-        {/* Mensagens e Instruções */}
-        <Card title="Mensagens Personalizadas" icon={MessageSquare}>
-          <div className="space-y-4">
-            <Input
-              label="Mensagem de Saudação"
-              value={config.greetingMessage}
-              onChange={(e) => handleChange('greetingMessage', e.target.value)}
-              placeholder="Olá! Como posso ajudar você hoje?"
-            />
-
-            <Input
-              label="Mensagem de Despedida"
-              value={config.farewellMessage}
-              onChange={(e) => handleChange('farewellMessage', e.target.value)}
-              placeholder="Obrigado pelo contato! Até logo!"
-            />
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Instruções Especiais
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Máximo de Tokens
               </label>
-              <textarea
-                value={config.specialInstructions}
-                onChange={(e) => handleChange('specialInstructions', e.target.value)}
-                placeholder="Ex: Sempre coletar nome do cliente primeiro. Perguntar sobre interesse em agendamento..."
-                rows={3}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+              <input
+                type="number"
+                value={config.maxTokens}
+                onChange={(e) => handleChange('maxTokens', parseInt(e.target.value))}
+                min={50}
+                max={1000}
+                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                required
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Controla o tamanho máximo das respostas (50-1000 tokens)
+              </p>
             </div>
           </div>
         </Card>
 
-        {/* Respostas Padrão */}
-        <Card title="Respostas Padrão" icon={TrendingUp}>
-          <div className="space-y-4">
-            <Input
-              label="Resposta sobre Preços"
-              value={config.defaultResponses.preco}
-              onChange={(e) => handleChange('defaultResponses.preco', e.target.value)}
-              placeholder="Planos a partir de R$49/mês!"
-            />
-
-            <Input
-              label="Resposta sobre Site"
-              value={config.defaultResponses.site}
-              onChange={(e) => handleChange('defaultResponses.site', e.target.value)}
-              placeholder="Acesse: topactive.com.br"
-            />
-
-            <Input
-              label="Resposta sobre Teste Grátis"
-              value={config.defaultResponses.teste}
-              onChange={(e) => handleChange('defaultResponses.teste', e.target.value)}
-              placeholder="Teste grátis por 7 dias!"
-            />
-          </div>
-        </Card>
 
         <div className="flex justify-end gap-4">
           <Button

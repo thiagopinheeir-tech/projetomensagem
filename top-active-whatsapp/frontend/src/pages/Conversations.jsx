@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageSquare, Search, Eye, TrendingUp, Users, RefreshCw, Calendar } from 'lucide-react';
+import { MessageSquare, Search, Eye, TrendingUp, Users, RefreshCw, Calendar, Volume2 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -272,7 +272,12 @@ const Conversations = () => {
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">
                         <div className="max-w-xs">
-                          <p className="truncate">{truncateMessage(conv.last_user_message)}</p>
+                          <p className="truncate flex items-center gap-1">
+                            {conv.last_user_message && conv.last_user_message.startsWith('[ÁUDIO]') && (
+                              <Volume2 size={14} className="text-blue-500 flex-shrink-0" title="Mensagem de áudio" />
+                            )}
+                            {truncateMessage(conv.last_user_message)}
+                          </p>
                           {conv.last_ai_response && (
                             <p className="truncate text-xs text-gray-500 dark:text-gray-500 mt-1">
                               🤖 {truncateMessage(conv.last_ai_response, 40)}
