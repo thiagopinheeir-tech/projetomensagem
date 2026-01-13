@@ -44,6 +44,8 @@ const Dashboard = () => {
 
     ws.onopen = () => {
       console.log('🔌 WebSocket conectado!');
+      console.log('🔌 WebSocket URL:', wsUrl);
+      console.log('🔌 User ID:', user.id);
       setLoading(false);
     };
 
@@ -59,8 +61,15 @@ const Dashboard = () => {
           setConversations(prev => [message.data, ...prev]);
           break;
         case 'qr':
-          console.log('🔍 QR code recebido:', message.data.qr);
-          setQrCode(message.data.qr);
+          console.log('🔍 QR code recebido via WebSocket:', message.data);
+          console.log('🔍 QR code data.qr existe:', !!message.data?.qr);
+          console.log('🔍 QR code data.qr length:', message.data?.qr?.length);
+          if (message.data?.qr) {
+            setQrCode(message.data.qr);
+            console.log('✅ QR code definido no estado');
+          } else {
+            console.warn('⚠️ QR code recebido mas message.data.qr está vazio');
+          }
           break;
         case 'status':
           // Poderíamos usar isso para mostrar o status da conexão do WhatsApp
@@ -70,6 +79,7 @@ const Dashboard = () => {
           }
           break;
         default:
+          console.log('📥 Tipo de mensagem desconhecido:', message.type);
           break;
       }
     };

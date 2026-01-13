@@ -81,6 +81,9 @@ class WhatsAppManager {
    * @param {string} profileId - ID do perfil (opcional)
    */
   async initializeForUser(userId, profileId = null) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp-manager.js:83',message:'initializeForUser ENTRY',data:{userId:userId,profileId:profileId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     const instance = this.getInstance(userId);
     
     // Configurar activeUserId e activeProfileId
@@ -95,14 +98,20 @@ class WhatsAppManager {
     // Inicializar WhatsApp se ainda não estiver inicializado
     if (!instance.isReady && !instance.isInitializing) {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp-manager.js:90',message:'About to call instance.initialize()',data:{userId:userId,hasUserId:!!instance.userId,isReady:instance.isReady,isInitializing:instance.isInitializing},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp-manager.js:96',message:'About to call instance.initialize()',data:{userId:userId,hasUserId:!!instance.userId,isReady:instance.isReady,isInitializing:instance.isInitializing},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
+      console.log(`📱 [WhatsAppManager] Inicializando WhatsApp para usuário ${userId}`);
       await instance.initialize();
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp-manager.js:93',message:'instance.initialize() completed',data:{userId:userId,isReady:instance.isReady,isInitializing:instance.isInitializing},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp-manager.js:100',message:'instance.initialize() completed',data:{userId:userId,isReady:instance.isReady,isInitializing:instance.isInitializing},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
+    } else {
+      console.log(`📱 [WhatsAppManager] WhatsApp já está inicializado ou inicializando para usuário ${userId}`);
     }
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp-manager.js:105',message:'initializeForUser EXIT',data:{userId:userId,isReady:instance.isReady,hasQRCode:!!instance.qrCode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     return instance;
   }
 

@@ -83,15 +83,25 @@ router.post('/connect/:userId', authMiddleware, requireUserId, async (req, res, 
  */
 router.post('/connect', authMiddleware, requireUserId, async (req, res, next) => {
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/whatsapp.js:84',message:'POST /connect ENTRY',data:{userId:req.userId,profileId:req.body.profileId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     const { profileId } = req.body;
 
+    console.log(`📱 [API] Iniciando conexão WhatsApp para usuário ${req.userId}`);
     await whatsappManager.initializeForUser(req.userId, profileId);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/whatsapp.js:90',message:'POST /connect EXIT',data:{userId:req.userId,initialized:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
 
     res.json({
       success: true,
       message: 'Conexão WhatsApp iniciada. Escaneie o QR code quando aparecer.'
     });
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/whatsapp.js:95',message:'POST /connect ERROR',data:{userId:req.userId,errorMessage:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     next(error);
   }
 });

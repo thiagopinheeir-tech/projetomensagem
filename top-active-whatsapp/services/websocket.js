@@ -77,19 +77,39 @@ class WebSocketManager {
       timestamp: Date.now()
     });
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.js:73',message:'broadcast ENTRY',data:{type:type,userId:userId,connectedUsers:Array.from(this.clients.keys()),totalClients:this.clients.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+
     if (userId) {
       // Broadcast para usuário específico
-      const ws = this.clients.get(userId);
+      const userIdStr = String(userId);
+      const ws = this.clients.get(userIdStr);
       if (ws && ws.readyState === WebSocket.OPEN) {
+        console.log(`📡 [WebSocket] Enviando mensagem tipo '${type}' para usuário ${userIdStr}`);
         ws.send(message);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.js:82',message:'broadcast sent to specific user',data:{type:type,userId:userIdStr,readyState:ws.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+      } else {
+        console.warn(`⚠️ [WebSocket] Usuário ${userIdStr} não está conectado ou WebSocket não está aberto (readyState: ${ws?.readyState})`);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.js:85',message:'broadcast FAILED - user not connected',data:{type:type,userId:userIdStr,hasClient:!!ws,readyState:ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
       }
     } else {
       // Broadcast para todos os clientes conectados
-      this.clients.forEach((ws) => {
+      let sentCount = 0;
+      this.clients.forEach((ws, uid) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(message);
+          sentCount++;
         }
       });
+      console.log(`📡 [WebSocket] Enviando mensagem tipo '${type}' para ${sentCount} cliente(s)`);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'websocket.js:95',message:'broadcast sent to all users',data:{type:type,sentCount:sentCount,totalClients:this.clients.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
     }
   }
 

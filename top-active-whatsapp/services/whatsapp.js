@@ -316,8 +316,14 @@ class WhatsAppService {
       // QR Code
       this.client.on('qr', async (qr) => {
         try {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:317',message:'QR event received',data:{userId:this.userId,hasQR:!!qr,qrLength:qr?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
           // Gerar Data URL para o frontend
           this.qrCode = await QRCode.toDataURL(qr);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:320',message:'QR code converted to DataURL',data:{userId:this.userId,hasQRCode:!!this.qrCode,qrCodeLength:this.qrCode?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
           
           const userLabel = this.userId ? ` (Usuário ${this.userId})` : '';
           console.log(`\n📱 ========================================`);
@@ -326,8 +332,13 @@ class WhatsAppService {
           
           // Enviar QR code via WebSocket para o usuário específico
           if (this.userId) {
+            console.log(`📡 [WhatsApp] Enviando QR code via WebSocket para usuário ${this.userId}`);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:329',message:'Broadcasting QR to specific user',data:{userId:this.userId,connectedUsers:wsManager.getConnectedUsers()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             wsManager.broadcast('qr', { qr: this.qrCode, userId: this.userId }, this.userId);
           } else {
+            console.log(`📡 [WhatsApp] Enviando QR code via WebSocket para todos os usuários`);
             wsManager.broadcast('qr', { qr: this.qrCode });
           }
           
@@ -342,6 +353,9 @@ class WhatsAppService {
           console.log('✅ QR code enviado via WebSocket para todos os clientes');
           
         } catch (err) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:345',message:'QR generation ERROR',data:{userId:this.userId,errorMessage:err.message,errorStack:err.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
           console.error('❌ Erro ao gerar QR Code:', err);
         }
       });
