@@ -323,8 +323,13 @@ class AutomationService {
   async cleanupExpiredStates() {
     try {
       // Limpar do banco
-      // Limpar estados expirados (filtrar por userId se possível)
-      await query('DELETE FROM automation_menu_state WHERE expires_at < NOW()');
+      // Limpar estados expirados (sem user_id para evitar erro se coluna não existir)
+      try {
+        await query('DELETE FROM automation_menu_state WHERE expires_at < NOW()');
+      } catch (error) {
+        // Se a tabela não existir ou tiver erro, apenas logar
+        console.warn('⚠️ [AutomationService] Erro ao limpar estados expirados:', error.message);
+      }
       
       // Limpar cache
       const now = new Date();
