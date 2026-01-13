@@ -164,10 +164,11 @@ try {
     console.log(`👤 Users: http://localhost:${PORT}/api/users/profile`);
     console.log(`💬 Messages: http://localhost:${PORT}/api/messages/send-simple`);
     
-    // Inicializar WebSocket Server (usa variável de ambiente ou porta padrão)
+    // Inicializar WebSocket Server (usa variável de ambiente ou porta padrão diferente do Express)
     try {
       const wsManager = require('./services/websocket');
-      const WS_PORT = process.env.WS_PORT || process.env.PORT || 5001;
+      // Garantir que WebSocket use porta diferente do Express
+      const WS_PORT = process.env.WS_PORT || (parseInt(PORT) + 1) || 5001;
       wsManager.initialize(parseInt(WS_PORT));
       console.log(`🚀 WebSocket server iniciado na porta ${WS_PORT}`);
     } catch (wsError) {
