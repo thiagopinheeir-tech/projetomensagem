@@ -130,12 +130,60 @@ try {
   console.error('❌ Erro ao parsear URL manualmente:', error.message);
 }
 
-const pool = new Pool({
-  connectionString: connectionString,
+// Tentar parsear a URL manualmente para usar parâmetros individuais
+// Isso evita problemas com o parser do pg quando há caracteres especiais
+let poolConfig = {
   ssl: connectionString && connectionString.includes('localhost') ? false : {
     rejectUnauthorized: false
   }
-});
+};
+
+try {
+  // Parsear URL manualmente
+  const urlMatch = connectionString.match(/postgresql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/([^?]+)(\?.*)?/);
+  
+  if (urlMatch) {
+    const [, username, password, hostname, port, database, queryParams] = urlMatch;
+    console.log('🔍 URL parseada manualmente:');
+    console.log('   Username:', username);
+    console.log('   Password:', password ? '****' : 'não encontrada');
+    console.log('   Hostname:', hostname);
+    console.log('   Port:', port);
+    console.log('   Database:', database);
+    console.log('   Query params:', queryParams || 'nenhum');
+    
+    // Usar parâmetros individuais ao invés de connectionString
+    // Isso evita problemas de parsing
+    poolConfig = {
+      user: username,
+      password: password,
+      host: hostname,
+      port: parseInt(port, 10),
+      database: database,
+      ssl: connectionString && connectionString.includes('localhost') ? false : {
+        rejectUnauthorized: false
+      },
+      // Adicionar query params se houver
+      ...(queryParams && queryParams.includes('pgbouncer=true') ? {
+        // Connection pooling do Supabase
+        connectionTimeoutMillis: 2000,
+        idleTimeoutMillis: 30000,
+        max: 15
+      } : {})
+    };
+    
+    console.log('✅ Usando parâmetros individuais para conexão (evita problemas de parsing)');
+  } else {
+    console.warn('⚠️ Não foi possível parsear URL manualmente, usando connectionString');
+    poolConfig.connectionString = connectionString;
+  }
+} catch (error) {
+  console.error('❌ Erro ao parsear URL manualmente:', error.message);
+  console.warn('⚠️ Usando connectionString como fallback');
+  poolConfig.connectionString = connectionString;
+}
+
+const pool = new Pool(poolConfig);
 
 // Log após criar o pool para verificar configuração
 pool.on('connect', (client) => {
