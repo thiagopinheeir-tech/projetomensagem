@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Save, Settings, MessageSquare, Briefcase, Power } from 'lucide-react';
+import { Bot, Save, MessageSquare, Briefcase, Power } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -19,9 +19,6 @@ const ChatbotSettings = () => {
     businessDescription: '',
     services: '',
     tone: 'amigavel',
-    model: 'gpt-4o-mini',
-    temperature: 0.7,
-    maxTokens: 300,
     specialInstructions: '',
     greetingMessage: 'Olá! Como posso ajudar você hoje?',
     farewellMessage: 'Obrigado pelo contato! Até logo!',
@@ -94,9 +91,6 @@ const ChatbotSettings = () => {
           businessDescription: cfg.businessDescription || '',
           services: Array.isArray(cfg.services) ? cfg.services.join(', ') : cfg.services || '',
           tone: cfg.tone || 'amigavel',
-          model: cfg.model || 'gpt-4o-mini',
-          temperature: cfg.temperature || 0.7,
-          maxTokens: cfg.maxTokens || 300,
           specialInstructions: cfg.specialInstructions || '',
           greetingMessage: cfg.greetingMessage || '',
           farewellMessage: cfg.farewellMessage || '',
@@ -131,10 +125,7 @@ const ChatbotSettings = () => {
       const payload = {
         templateKey: selectedTemplateKey,
         promptOnlyMode,
-        specialInstructions: config.specialInstructions,
-        model: config.model,
-        temperature: config.temperature,
-        maxTokens: config.maxTokens
+        specialInstructions: config.specialInstructions
       };
 
       const response = await api.post('/api/chatbot/profiles/save', payload);
@@ -282,48 +273,6 @@ const ChatbotSettings = () => {
             </div>
           </div>
         </Card>
-
-        {/* Configurações Técnicas de IA */}
-        <Card title="Configurações Técnicas de IA" icon={Settings}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Temperatura ({config.temperature})
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={config.temperature}
-                onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Menor = mais focado | Maior = mais criativo
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Máximo de Tokens
-              </label>
-              <input
-                type="number"
-                value={config.maxTokens}
-                onChange={(e) => handleChange('maxTokens', parseInt(e.target.value))}
-                min={50}
-                max={1000}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                required
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Controla o tamanho máximo das respostas (50-1000 tokens)
-              </p>
-            </div>
-          </div>
-        </Card>
-
 
         <div className="flex justify-end gap-4">
           <Button

@@ -298,8 +298,8 @@ const APIManager = () => {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* OpenAI Configuration */}
-        <Card title="Configuração OpenAI" icon={Key}>
+        {/* Card OpenAI */}
+        <Card title="OpenAI" icon={Key}>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -390,8 +390,8 @@ const APIManager = () => {
           </div>
         </Card>
 
-        {/* Google OAuth (Agenda) */}
-        <Card title="Google OAuth (Agenda)" icon={Calendar}>
+        {/* Card Google */}
+        <Card title="Google" icon={Calendar}>
           <div className="space-y-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Essas credenciais serão salvas no <span className="font-medium">perfil ativo</span> do Chatbot. Perfil ativo detectado: {activeProfileId ? activeProfileId : '(nenhum)'}.

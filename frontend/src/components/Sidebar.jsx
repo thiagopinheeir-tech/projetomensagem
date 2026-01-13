@@ -1,16 +1,13 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, MessageSquare, User as UserIcon, Bot, X, MessageCircle, Key, Briefcase, Zap, Settings, Smartphone } from 'lucide-react';
+import { LayoutDashboard, User as UserIcon, Bot, X, MessageCircle, Key, Briefcase, Smartphone } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/messages', label: 'Mensagens', icon: MessageSquare },
     { path: '/conversations', label: 'Conversas', icon: MessageCircle },
     { path: '/crm', label: 'CRM', icon: Briefcase },
     { path: '/chatbot', label: 'Chatbot IA', icon: Bot },
-    { path: '/automatizations', label: 'Automações', icon: Zap },
     { path: '/whatsapp-connection', label: 'WhatsApp', icon: Smartphone },
-    { path: '/settings', label: 'Configurações', icon: Settings },
     { path: '/api-manager', label: 'Chaves e Integrações', icon: Key },
     { path: '/profile', label: 'Perfil', icon: UserIcon },
   ];
