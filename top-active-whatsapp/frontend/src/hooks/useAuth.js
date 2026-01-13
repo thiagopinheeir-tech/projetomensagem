@@ -36,12 +36,21 @@ export const useAuth = () => {
 
   const register = async (email, password, full_name, company_name) => {
     try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      console.log('🔍 Tentando registrar usuário:', {
+        apiUrl,
+        endpoint: `${apiUrl}/api/auth/register`,
+        email: email?.substring(0, 20)
+      });
+
       const response = await api.post('/api/auth/register', {
         email,
         password,
         full_name,
         company_name,
       });
+      
+      console.log('✅ Resposta recebida:', response.data);
       
       if (!response.data.success) {
         return { success: false, error: response.data.message || 'Erro ao criar conta' };
@@ -56,11 +65,47 @@ export const useAuth = () => {
       
       return { success: true };
     } catch (error) {
-      console.error('Erro ao registrar:', error);
+      console.error('❌ Erro completo ao registrar:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method
+        }
+      });
       
       // Tratamento de erros específicos
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
-        return { success: false, error: 'Não foi possível conectar ao servidor. Verifique se o backend está rodando.' };
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || !error.response) {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        console.error('❌ Erro de conexão:', {
+          apiUrl,
+          errorCode: error.code,
+          errorMessage: error.message
+        });
+        
+        // Tentar verificar se a URL está correta
+        if (apiUrl.startsWith('_') || apiUrl.startsWith(' ')) {
+          return { 
+            success: false, 
+            error: `URL do backend inválida: "${apiUrl}". Verifique a variável VITE_API_URL no Vercel (não deve ter espaços ou caracteres extras no início).` 
+          };
+        }
+        
+        return { 
+          success: false, 
+          error: `Não foi possível conectar ao servidor em ${apiUrl}. Verifique se o backend está rodando e se a URL está correta.` 
+        };
+      }
+      
+      // Erro CORS
+      if (error.message?.includes('CORS') || error.code === 'ERR_BLOCKED_BY_CLIENT') {
+        return { 
+          success: false, 
+          error: 'Erro de CORS. O backend precisa permitir requisições do frontend. Verifique a configuração CORS_ORIGIN no Railway.' 
+        };
       }
       
       if (error.response?.data?.message) {
@@ -69,6 +114,10 @@ export const useAuth = () => {
       
       if (error.response?.status === 409) {
         return { success: false, error: 'Este email já está cadastrado' };
+      }
+      
+      if (error.response?.status === 400) {
+        return { success: false, error: error.response.data?.message || 'Dados inválidos. Verifique os campos preenchidos.' };
       }
       
       return { success: false, error: error.message || 'Erro ao criar conta. Tente novamente.' };

@@ -1,12 +1,37 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+// Obter URL da API e validar
+const getApiUrl = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  
+  // Validar URL (remover espaços e caracteres inválidos no início)
+  let cleanUrl = apiUrl.trim();
+  
+  // Remover underscore ou outros caracteres inválidos no início
+  if (cleanUrl.startsWith('_') || cleanUrl.startsWith(' ')) {
+    console.warn('⚠️ URL do backend tem caracteres inválidos no início:', apiUrl);
+    cleanUrl = cleanUrl.replace(/^[_\s]+/, '');
+  }
+  
+  // Garantir que começa com http:// ou https://
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    console.warn('⚠️ URL do backend não começa com http:// ou https://:', apiUrl);
+    cleanUrl = `https://${cleanUrl}`;
+  }
+  
+  console.log('🔗 API URL configurada:', cleanUrl);
+  
+  return cleanUrl;
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+  baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  timeout: 30000, // 30 segundos de timeout
 });
 
 // Interceptor para adicionar token
