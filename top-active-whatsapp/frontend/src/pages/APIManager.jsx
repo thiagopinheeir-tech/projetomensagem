@@ -32,10 +32,20 @@ const APIManager = () => {
   const [googleCalendars, setGoogleCalendars] = useState([]);
   const [selectedCalendarId, setSelectedCalendarId] = useState('');
   const [loadingGoogle, setLoadingGoogle] = useState(false);
+  
+  const [premiumShearsConfig, setPremiumShearsConfig] = useState({
+    api_url: '',
+    api_key: '',
+    enabled: false,
+    api_url_preview: null,
+    has_key: false
+  });
+  const [showPremiumShearsKey, setShowPremiumShearsKey] = useState(false);
+  const [loadingScheduler, setLoadingScheduler] = useState(false);
 
   useEffect(() => {
     (async () => {
-      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadGoogleStatus()]);
+      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadGoogleStatus(), loadSchedulerConfig()]);
     })();
   }, []);
 
@@ -104,6 +114,53 @@ const APIManager = () => {
     }
   };
 
+  const loadSchedulerConfig = async () => {
+    try {
+      setLoadingScheduler(true);
+      const response = await api.get('/api/config/scheduler');
+
+      if (response.data.success) {
+        const cfg = response.data.config;
+        setPremiumShearsConfig({
+          api_url: cfg.api_url || '',
+          api_key: '',
+          enabled: cfg.enabled || false,
+          api_url_preview: cfg.api_url_preview || null,
+          has_key: cfg.has_key || false
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração do scheduler:', error);
+      toast.error('Erro ao carregar configuração do scheduler');
+    } finally {
+      setLoadingScheduler(false);
+    }
+  };
+
+  const handleSaveScheduler = async () => {
+    try {
+      setSaving(true);
+      const payload = {
+        api_url: premiumShearsConfig.api_url?.trim() || null,
+        api_key: premiumShearsConfig.api_key?.trim() || null,
+        enabled: premiumShearsConfig.enabled
+      };
+
+      const response = await api.put('/api/config/scheduler', payload);
+
+      if (response.data.success) {
+        toast.success('Configuração do scheduler salva com sucesso!');
+        setPremiumShearsConfig(prev => ({ ...prev, api_key: '' }));
+        setTimeout(loadSchedulerConfig, 1000);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Erro ao salvar configuração do scheduler');
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleConnectGoogle = async () => {
     try {
       setLoadingGoogle(true);
@@ -115,7 +172,7 @@ const APIManager = () => {
       const url = resp.data?.url;
       if (!url) throw new Error('URL OAuth não retornada');
       window.open(url, '_blank', 'noopener,noreferrer');
-      toast.success('Conclua a conexão na aba do Google e depois clique em “Atualizar status”.');
+      toast.success('Conclua a conexão na aba do Google e depois clique em "Atualizar status".');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Erro ao iniciar conexão com Google';
       toast.error(msg);
@@ -128,55 +185,47 @@ const APIManager = () => {
     try {
       setLoadingGoogle(true);
       const resp = await api.get('/api/google/calendars');
-      if (resp.data.success) {
-        setGoogleCalendars(resp.data.calendars || []);
-        setSelectedCalendarId(resp.data.selected || selectedCalendarId || '');
+      if (resp.data.success && resp.data.calendars) {
+        setGoogleCalendars(resp.data.calendars);
       }
     } catch (e) {
-      const msg = e.response?.data?.message || 'Erro ao listar calendários';
-      toast.error(msg);
+      toast.error(e.response?.data?.message || 'Erro ao listar calendários');
     } finally {
       setLoadingGoogle(false);
     }
   };
 
   const handleSelectCalendar = async () => {
-    if (!selectedCalendarId) {
-      toast.error('Selecione um calendário');
-      return;
-    }
     try {
       setLoadingGoogle(true);
-      const resp = await api.post('/api/google/calendar/select', { calendarId: selectedCalendarId });
+      if (!activeProfileId) {
+        toast.error('Ative um perfil em Chatbot antes de selecionar calendário.');
+        return;
+      }
+      const resp = await api.post('/api/google/calendars/select', { calendarId: selectedCalendarId });
       if (resp.data.success) {
-        toast.success('Calendário selecionado!');
+        toast.success('Calendário selecionado com sucesso!');
         await loadGoogleStatus();
       }
     } catch (e) {
-      const msg = e.response?.data?.message || 'Erro ao selecionar calendário';
-      toast.error(msg);
+      toast.error(e.response?.data?.message || 'Erro ao selecionar calendário');
     } finally {
       setLoadingGoogle(false);
     }
   };
 
   const handleDisconnectGoogle = async () => {
-    if (!confirm('Tem certeza que deseja remover as credenciais do Google? Você precisará conectar novamente para usar o Google Calendar.')) {
-      return;
-    }
-
-    setLoadingGoogle(true);
     try {
-      await api.delete('/api/google/disconnect');
-      toast.success('Credenciais do Google removidas com sucesso!');
-      setGoogleStatus({ connected: false, calendarIdDefault: null });
-      setGoogleCalendars([]);
-      setSelectedCalendarId('');
-      // Recarregar status após remover
-      await loadGoogleStatus();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Erro ao remover credenciais do Google');
-      console.error(error);
+      setLoadingGoogle(true);
+      const resp = await api.post('/api/google/disconnect');
+      if (resp.data.success) {
+        toast.success('Credenciais do Google removidas com sucesso!');
+        setGoogleStatus({ connected: false, calendarIdDefault: null });
+        setSelectedCalendarId('');
+        setGoogleCalendars([]);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Erro ao desconectar Google');
     } finally {
       setLoadingGoogle(false);
     }
@@ -184,19 +233,19 @@ const APIManager = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    setSaving(true);
-
     try {
+      setSaving(true);
       const payload = {
-        ...config,
-        // Só enviar chave se foi modificada
-        ...(config.openai_key.trim() ? { openai_key: config.openai_key.trim() } : {})
+        openai_key: config.openai_key || undefined,
+        model: config.model,
+        temperature: config.temperature,
+        max_tokens: config.max_tokens
       };
 
       const response = await api.put('/api/config/ai', payload);
 
       if (response.data.success) {
-        toast.success('Configuração OpenAI salva com sucesso!');
+        toast.success('Configuração salva com sucesso!');
         
         // Limpar campo de chave após salvar
         setConfig(prev => ({ ...prev, openai_key: '' }));
@@ -298,8 +347,8 @@ const APIManager = () => {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* OpenAI Configuration */}
-        <Card title="Configuração OpenAI" icon={Key}>
+        {/* Card OpenAI */}
+        <Card title="OpenAI" icon={Key}>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -349,7 +398,7 @@ const APIManager = () => {
                   className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                   <option value="gpt-4o-mini">GPT-4o Mini (Rápido e Econômico)</option>
-                  <option value="gpt-4o">GPT-4o (Mais Capaz)</option>
+                  <option value="gpt-4o">GPT-4o (Mais Poderoso)</option>
                   <option value="gpt-4-turbo">GPT-4 Turbo</option>
                   <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
                 </select>
@@ -357,7 +406,7 @@ const APIManager = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Temperatura ({config.temperature})
+                  Temperatura ({config.temperature.toFixed(1)})
                 </label>
                 <input
                   type="range"
@@ -366,22 +415,26 @@ const APIManager = () => {
                   step="0.1"
                   value={config.temperature}
                   onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
-                  className="w-full"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  0 = Focado e Determinístico | 1 = Criativo e Variado
-                </p>
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <span>0 = Focado e Determinístico</span>
+                  <span>1 = Criativo e Variado</span>
+                </div>
               </div>
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Máximo de Tokens
+              </label>
               <Input
-                label="Máximo de Tokens"
                 type="number"
+                min="50"
+                max="2000"
                 value={config.max_tokens}
-                onChange={(e) => handleChange('max_tokens', parseInt(e.target.value))}
-                min={50}
-                max={2000}
+                onChange={(e) => handleChange('max_tokens', parseInt(e.target.value) || 300)}
+                placeholder="300"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Número máximo de tokens na resposta (50-2000)
@@ -390,137 +443,237 @@ const APIManager = () => {
           </div>
         </Card>
 
-        {/* Google OAuth (Agenda) */}
+        {/* Card Google OAuth */}
         <Card title="Google OAuth (Agenda)" icon={Calendar}>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Essas credenciais serão salvas no <span className="font-medium">perfil ativo</span> do Chatbot. Perfil ativo detectado: {activeProfileId ? activeProfileId : '(nenhum)'}.
-            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Google OAuth Client ID
+              </label>
+              <Input
+                label="Google OAuth Client ID"
+                value={googleOAuth.clientId}
+                onChange={(e) => handleGoogleChange('clientId', e.target.value)}
+                placeholder="Seu Client ID do Google"
+              />
 
-            <Input
-              label="Google OAuth Client ID"
-              value={googleOAuth.clientId}
-              onChange={(e) => handleGoogleChange('clientId', e.target.value)}
-              placeholder="Seu Client ID do Google"
-            />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Google OAuth Client Secret
+                </label>
+                <div className="relative">
+                  <Input
+                    type={showGoogleSecret ? 'text' : 'password'}
+                    value={googleOAuth.clientSecret}
+                    onChange={(e) => handleGoogleChange('clientSecret', e.target.value)}
+                    placeholder="Deixe em branco para manter o secret atual"
+                    icon={Key}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleSecret(!showGoogleSecret)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    {showGoogleSecret ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Dica: para salvar o secret, o backend precisa ter <span className="font-mono">ENCRYPTION_KEY</span> definido no <span className="font-mono">.env</span>.
+                </p>
+              </div>
+
+              <Input
+                label="Google Redirect URI"
+                value={googleOAuth.redirectUri}
+                onChange={(e) => handleGoogleChange('redirectUri', e.target.value)}
+                placeholder="http://localhost:5000/api/google/oauth/callback"
+              />
+
+              <div className="flex flex-col gap-3 pt-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Badge variant={googleStatus.connected ? 'success' : 'default'} className="flex items-center gap-2 px-4 py-2">
+                    <Calendar size={16} />
+                    {googleStatus.connected ? 'Conectado' : 'Não conectado'}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="flex items-center gap-2"
+                    onClick={handleConnectGoogle}
+                    disabled={loadingGoogle}
+                  >
+                    <Calendar size={18} />
+                    Conectar Google
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex items-center gap-2"
+                    onClick={loadGoogleStatus}
+                    disabled={loadingGoogle}
+                  >
+                    <RefreshCw size={18} />
+                    Atualizar status
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    className="flex items-center gap-2"
+                    onClick={handleDisconnectGoogle}
+                    disabled={loadingGoogle}
+                  >
+                    <XCircle size={18} />
+                    Remover Credenciais
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Calendário padrão
+                    </label>
+                    <select
+                      value={selectedCalendarId}
+                      onChange={(e) => setSelectedCalendarId(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      disabled={loadingGoogle || !googleStatus.connected}
+                    >
+                      <option value="">Selecione um calendário...</option>
+                      {googleCalendars.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.summary}{c.primary ? ' (principal)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Selecionado atualmente: {googleStatus.calendarIdDefault || '(nenhum)'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-end gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="flex items-center gap-2 w-full justify-center"
+                      onClick={handleLoadCalendars}
+                      disabled={loadingGoogle || !googleStatus.connected}
+                    >
+                      <RefreshCw size={18} />
+                      Listar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex items-center gap-2 w-full justify-center"
+                      onClick={handleSelectCalendar}
+                      disabled={loadingGoogle || !googleStatus.connected || !selectedCalendarId}
+                    >
+                      <Save size={18} />
+                      Usar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Card Sistema de Agendamento (Premium Shears) */}
+        <Card title="Sistema de Agendamento" icon={Calendar}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                URL da API do Premium Shears Scheduler
+              </label>
+              
+              {premiumShearsConfig.api_url_preview && !premiumShearsConfig.api_url && (
+                <div className="mb-2">
+                  <Badge variant="success" className="flex items-center gap-2 w-fit">
+                    <Key size={14} />
+                    URL configurada: {premiumShearsConfig.api_url_preview}
+                  </Badge>
+                </div>
+              )}
+
+              <Input
+                type="text"
+                value={premiumShearsConfig.api_url}
+                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, api_url: e.target.value})}
+                placeholder={premiumShearsConfig.api_url_preview ? 'Deixe em branco para manter a URL atual' : 'https://seu-projeto.supabase.co/functions/v1/api'}
+                icon={Key}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Configure a URL da API do seu sistema de agendamento
+              </p>
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Google OAuth Client Secret
+                API Key (opcional)
               </label>
+              
+              {premiumShearsConfig.has_key && !premiumShearsConfig.api_key && (
+                <div className="mb-2">
+                  <Badge variant="success" className="flex items-center gap-2 w-fit">
+                    <Key size={14} />
+                    API Key configurada
+                  </Badge>
+                </div>
+              )}
+
               <div className="relative">
                 <Input
-                  type={showGoogleSecret ? 'text' : 'password'}
-                  value={googleOAuth.clientSecret}
-                  onChange={(e) => handleGoogleChange('clientSecret', e.target.value)}
-                  placeholder="Deixe em branco para manter o secret atual"
+                  type={showPremiumShearsKey ? 'text' : 'password'}
+                  value={premiumShearsConfig.api_key}
+                  onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, api_key: e.target.value})}
+                  placeholder={premiumShearsConfig.has_key ? 'Deixe em branco para manter a chave atual' : 'Sua API key se necessário'}
                   icon={Key}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowGoogleSecret(!showGoogleSecret)}
+                  onClick={() => setShowPremiumShearsKey(!showPremiumShearsKey)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
-                  {showGoogleSecret ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPremiumShearsKey ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Dica: para salvar o secret, o backend precisa ter <span className="font-mono">ENCRYPTION_KEY</span> definido no <span className="font-mono">.env</span>.
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="use-premium-shears"
+                checked={premiumShearsConfig.enabled}
+                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, enabled: e.target.checked})}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <label htmlFor="use-premium-shears" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Usar Premium Shears Scheduler ao invés de Google Calendar
+              </label>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Webhook URL para o Premium Shears:</strong>
+              </p>
+              <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1 break-all">
+                {api.defaults.baseURL || 'https://projetomensagem-production.up.railway.app'}/api/webhooks/premium-shears/appointment-created
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                Configure esta URL no seu sistema de agendamento para receber notificações quando agendamentos forem criados
               </p>
             </div>
 
-            <Input
-              label="Google Redirect URI"
-              value={googleOAuth.redirectUri}
-              onChange={(e) => handleGoogleChange('redirectUri', e.target.value)}
-              placeholder="http://localhost:5000/api/google/oauth/callback"
-            />
-
-            <div className="flex flex-col gap-3 pt-2">
-              <div className="flex items-center gap-3 flex-wrap">
-                <Badge variant={googleStatus.connected ? 'success' : 'default'} className="flex items-center gap-2 px-4 py-2">
-                  <Calendar size={16} />
-                  {googleStatus.connected ? 'Conectado' : 'Não conectado'}
-                </Badge>
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="flex items-center gap-2"
-                  onClick={handleConnectGoogle}
-                  disabled={loadingGoogle}
-                >
-                  <Calendar size={18} />
-                  Conectar Google
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex items-center gap-2"
-                  onClick={loadGoogleStatus}
-                  disabled={loadingGoogle}
-                >
-                  <RefreshCw size={18} />
-                  Atualizar status
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  className="flex items-center gap-2"
-                  onClick={handleDisconnectGoogle}
-                  disabled={loadingGoogle}
-                >
-                  <XCircle size={18} />
-                  Remover Credenciais
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Calendário padrão
-                  </label>
-                  <select
-                    value={selectedCalendarId}
-                    onChange={(e) => setSelectedCalendarId(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    disabled={loadingGoogle || !googleStatus.connected}
-                  >
-                    <option value="">Selecione um calendário...</option>
-                    {googleCalendars.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.summary}{c.primary ? ' (principal)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Selecionado atualmente: {googleStatus.calendarIdDefault || '(nenhum)'}
-                  </p>
-                </div>
-
-                <div className="flex items-end gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="flex items-center gap-2 w-full justify-center"
-                    onClick={handleLoadCalendars}
-                    disabled={loadingGoogle || !googleStatus.connected}
-                  >
-                    <RefreshCw size={18} />
-                    Listar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex items-center gap-2 w-full justify-center"
-                    onClick={handleSelectCalendar}
-                    disabled={loadingGoogle || !googleStatus.connected || !selectedCalendarId}
-                  >
-                    <Save size={18} />
-                    Usar
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSaveScheduler}
+              disabled={saving || loadingScheduler}
+              className="w-full"
+            >
+              <Save size={18} />
+              {saving ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
+            </Button>
           </div>
         </Card>
 
