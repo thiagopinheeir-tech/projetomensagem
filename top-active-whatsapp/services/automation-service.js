@@ -43,18 +43,34 @@ class AutomationService {
    */
   async handleMenuResponse({ userId, profileId, phone, message, lowerMessage }) {
     try {
+      // Converter userId se necessário
+      const { convertUserIdForTable } = require('../utils/userId-converter');
+      let convertedUserId = null;
+      if (userId) {
+        try {
+          convertedUserId = await convertUserIdForTable('automation_menu_state', userId);
+        } catch (convertError) {
+          console.error(`❌ [AutomationService] Erro ao converter userId ${userId}:`, convertError.message);
+        }
+      }
+      
       // Buscar menu ativo no cache ou banco
       let menuState = this.menuStateCache.get(phone);
       
       if (!menuState) {
         // Buscar no banco
-        // Filtrar por userId para isolamento multi-tenant
-        const result = await query(
-          `SELECT menu_id, expires_at 
-           FROM automation_menu_state 
-           WHERE phone = $1 AND user_id = $2 AND expires_at > NOW()`,
-          [phone, userId]
-        );
+        // Filtrar por userId para isolamento multi-tenant (se a tabela tiver user_id)
+        let queryText = `SELECT menu_id, expires_at FROM automation_menu_state WHERE phone = $1 AND expires_at > NOW()`;
+        let params = [phone];
+        
+        // Adicionar filtro por userId se disponível e convertido
+        if (convertedUserId !== null) {
+          // Verificar se a tabela tem coluna user_id antes de usar
+          queryText = `SELECT menu_id, expires_at FROM automation_menu_state WHERE phone = $1 AND user_id = $2 AND expires_at > NOW()`;
+          params.push(convertedUserId);
+        }
+        
+        const result = await query(queryText, params);
         
         if (result.rows.length === 0) {
           return { handled: false };
@@ -70,7 +86,17 @@ class AutomationService {
       // Verificar expiração
       if (new Date() > menuState.expiresAt) {
         this.menuStateCache.delete(phone);
-        await query('DELETE FROM automation_menu_state WHERE phone = $1 AND user_id = $2', [phone, userId]);
+        // Tentar deletar com user_id se disponível, senão apenas por phone
+        if (convertedUserId !== null) {
+          try {
+            await query('DELETE FROM automation_menu_state WHERE phone = $1 AND user_id = $2', [phone, convertedUserId]);
+          } catch (e) {
+            // Se falhar (tabela pode não ter user_id), deletar apenas por phone
+            await query('DELETE FROM automation_menu_state WHERE phone = $1', [phone]);
+          }
+        } else {
+          await query('DELETE FROM automation_menu_state WHERE phone = $1', [phone]);
+        }
         return { handled: false };
       }
 
@@ -207,13 +233,47 @@ class AutomationService {
             const expiresAt = new Date();
             expiresAt.setMinutes(expiresAt.getMinutes() + 15); // Menu expira em 15 minutos
 
-            await query(
-              `INSERT INTO automation_menu_state (phone, user_id, menu_id, expires_at)
-               VALUES ($1, $2, $3, $4)
-               ON CONFLICT (phone, user_id) 
-               DO UPDATE SET menu_id = $3, expires_at = $4, created_at = NOW()`,
-              [phone, userId, menu.id, expiresAt]
-            );
+            // Converter userId antes de inserir
+            let insertUserId = convertedUserId;
+            if (!insertUserId && userId) {
+              try {
+                insertUserId = await convertUserIdForTable('automation_menu_state', userId);
+              } catch (e) {
+                console.warn(`⚠️ [AutomationService] Não foi possível converter userId para inserção: ${e.message}`);
+              }
+            }
+            
+            // Tentar inserir com user_id se disponível
+            if (insertUserId !== null) {
+              try {
+                await query(
+                  `INSERT INTO automation_menu_state (phone, user_id, menu_id, expires_at)
+                   VALUES ($1, $2, $3, $4)
+                   ON CONFLICT (phone, user_id) 
+                   DO UPDATE SET menu_id = $3, expires_at = $4, created_at = NOW()`,
+                  [phone, insertUserId, menu.id, expiresAt]
+                );
+              } catch (e) {
+                // Se falhar (tabela pode não ter user_id), inserir sem user_id
+                console.warn(`⚠️ [AutomationService] Inserindo sem user_id (tabela pode não ter essa coluna): ${e.message}`);
+                await query(
+                  `INSERT INTO automation_menu_state (phone, menu_id, expires_at)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT (phone) 
+                   DO UPDATE SET menu_id = $2, expires_at = $3, created_at = NOW()`,
+                  [phone, menu.id, expiresAt]
+                );
+              }
+            } else {
+              // Inserir sem user_id
+              await query(
+                `INSERT INTO automation_menu_state (phone, menu_id, expires_at)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (phone) 
+                 DO UPDATE SET menu_id = $2, expires_at = $3, created_at = NOW()`,
+                [phone, menu.id, expiresAt]
+              );
+            }
 
             this.menuStateCache.set(phone, {
               menuId: menu.id,

@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
+const { requireUserId } = require('../middleware/data-isolation');
 const { query } = require('../config/database');
 const { supabase, db, isConfigured } = require('../config/supabase');
 const crypto = require('crypto');
 const encryption = require('../services/encryption');
 const whatsappManager = require('../services/whatsapp-manager');
+const { convertUserIdForTable } = require('../utils/userId-converter');
 
 // Chave de criptografia (deve estar no .env em produção)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
@@ -176,6 +178,10 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
       }
     }
     
+    // Converter userId para o tipo correto das tabelas
+    const convertedUserIdForConfig = await convertUserIdForTable('config_ai', userId);
+    const convertedUserIdForApiKeys = await convertUserIdForTable('user_api_keys', userId);
+    
     // Fallback: salvar no PostgreSQL local
     await query(
       `INSERT INTO config_ai (user_id, openai_key_encrypted, model, temperature, max_tokens, updated_at)
@@ -183,7 +189,7 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
        ON CONFLICT (user_id) DO UPDATE SET
          ${updateFields.join(', ')}`,
       [
-        userId,
+        convertedUserIdForConfig,
         encryptedKey,
         model || 'gpt-4o-mini',
         temperature !== undefined ? temperature : 0.7,
@@ -199,7 +205,7 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
          VALUES ($1, 'openai', $2, true)
          ON CONFLICT (user_id, provider) 
          DO UPDATE SET api_key_encrypted = $2, is_active = true, updated_at = CURRENT_TIMESTAMP`,
-        [userId, encryptedKey]
+        [convertedUserIdForApiKeys, encryptedKey]
       );
       
       // Reinicializar chatbot da instância do usuário com nova chave
