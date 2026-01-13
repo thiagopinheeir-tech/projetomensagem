@@ -223,7 +223,72 @@ class WhatsAppManager {
   getInstanceCount() {
     return this.instances.size;
   }
+
+  /**
+   * Tenta reconectar instâncias que tinham sessão salva
+   * Útil quando o servidor reinicia
+   */
+  async reconnectSavedSessions() {
+    console.log('🔄 [WhatsAppManager] Verificando sessões salvas para reconexão automática...');
+    
+    try {
+      const baseAuthDir = process.env.RAILWAY_ENVIRONMENT 
+        ? '/app/.wwebjs_auth'
+        : path.join(process.cwd(), '.wwebjs_auth');
+      
+      if (!fs.existsSync(baseAuthDir)) {
+        console.log('ℹ️ [WhatsAppManager] Nenhum diretório de sessão encontrado');
+        return;
+      }
+
+      const userDirs = fs.readdirSync(baseAuthDir)
+        .filter(dir => dir.startsWith('user_'))
+        .map(dir => dir.replace('user_', ''));
+
+      if (userDirs.length === 0) {
+        console.log('ℹ️ [WhatsAppManager] Nenhuma sessão salva encontrada');
+        return;
+      }
+
+      console.log(`📱 [WhatsAppManager] Encontradas ${userDirs.length} sessão(ões) salva(s)`);
+
+      // Para cada sessão salva, tentar reconectar
+      for (const userId of userDirs) {
+        try {
+          const sessionPath = path.join(baseAuthDir, `user_${userId}`);
+          const hasSessionFiles = fs.existsSync(sessionPath) && 
+            fs.readdirSync(sessionPath).some(f => f.endsWith('.json') || f.endsWith('.data'));
+
+          if (hasSessionFiles) {
+            console.log(`🔄 [WhatsAppManager] Tentando reconectar usuário ${userId}...`);
+            const instance = this.getInstance(userId);
+            
+            // Aguardar um pouco antes de tentar reconectar (evitar sobrecarga)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            if (!instance.isReady && !instance.isInitializing) {
+              await instance.initialize();
+            }
+          }
+        } catch (error) {
+          console.error(`⚠️ [WhatsAppManager] Erro ao reconectar usuário ${userId}:`, error.message);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [WhatsAppManager] Erro ao verificar sessões salvas:', error.message);
+    }
+  }
 }
 
 // Exportar singleton
-module.exports = new WhatsAppManager();
+const manager = new WhatsAppManager();
+
+// Tentar reconectar sessões salvas após 5 segundos do carregamento do módulo
+// Isso permite que o servidor termine de inicializar antes de tentar reconectar
+setTimeout(() => {
+  manager.reconnectSavedSessions().catch(err => {
+    console.error('❌ Erro ao reconectar sessões salvas:', err);
+  });
+}, 5000);
+
+module.exports = manager;

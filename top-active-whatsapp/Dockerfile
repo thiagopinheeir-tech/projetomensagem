@@ -42,8 +42,8 @@ RUN npm install --production
 # Copiar código da aplicação
 COPY . .
 
-# Criar diretórios necessários
-RUN mkdir -p logs uploads temp prompts
+# Criar diretórios necessários (incluindo diretório de sessão WhatsApp)
+RUN mkdir -p logs uploads temp prompts .wwebjs_auth
 
 # Expor porta
 EXPOSE 5000

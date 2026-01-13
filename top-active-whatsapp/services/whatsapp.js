@@ -32,9 +32,21 @@ class WhatsAppService {
     this.activeProfileId = null;
     
     // Diretório de autenticação isolado por usuário
+    // Usar diretório persistente no Railway (/app) ou local
+    const baseAuthDir = process.env.RAILWAY_ENVIRONMENT 
+      ? '/app/.wwebjs_auth' // Railway: usar /app para persistência
+      : path.join(process.cwd(), '.wwebjs_auth'); // Local: usar process.cwd()
+    
     this.authPath = this.userId 
-      ? path.join(process.cwd(), '.wwebjs_auth', `user_${this.userId}`)
-      : path.join(process.cwd(), '.wwebjs_auth', 'default');
+      ? path.join(baseAuthDir, `user_${this.userId}`)
+      : path.join(baseAuthDir, 'default');
+    
+    // Garantir que o diretório existe
+    const fs = require('fs');
+    if (!fs.existsSync(baseAuthDir)) {
+      fs.mkdirSync(baseAuthDir, { recursive: true });
+      console.log(`📁 Diretório de sessão criado: ${baseAuthDir}`);
+    }
     
     // NUNCA inicializar automaticamente no construtor
     // Inicialização só deve acontecer via initialize() com userId válido
@@ -293,10 +305,22 @@ class WhatsAppService {
           '--safebrowsing-disable-auto-update'
         ];
 
-      // Garantir que o diretório de autenticação existe
+      // Garantir que o diretório de autenticação existe (já criado no construtor, mas garantir novamente)
       const fs = require('fs');
       if (!fs.existsSync(this.authPath)) {
         fs.mkdirSync(this.authPath, { recursive: true });
+        console.log(`📁 Diretório de autenticação criado: ${this.authPath}`);
+      }
+      
+      // Verificar se há sessão salva anteriormente
+      const sessionFiles = fs.existsSync(this.authPath) 
+        ? fs.readdirSync(this.authPath).filter(f => f.endsWith('.json') || f.endsWith('.data'))
+        : [];
+      
+      if (sessionFiles.length > 0) {
+        console.log(`✅ Sessão anterior encontrada. Tentando restaurar...`);
+      } else {
+        console.log(`ℹ️ Nenhuma sessão anterior encontrada. Será necessário escanear QR code.`);
       }
 
       // Detectar se está em produção (Railway) e configurar executablePath do Chrome
@@ -491,11 +515,30 @@ class WhatsAppService {
         this.isAuthenticated = false;
       });
 
-      // Disconnected
-      this.client.on('disconnected', (reason) => {
+      // Disconnected - Reconectar automaticamente
+      this.client.on('disconnected', async (reason) => {
         console.log('\n⚠️ WhatsApp desconectado:', reason);
         this.isReady = false;
+        this.isAuthenticated = false;
         this.qrCode = null;
+        
+        // Não reconectar se foi logout manual
+        if (reason === 'LOGOUT') {
+          console.log('ℹ️ Logout manual detectado. Não reconectando automaticamente.');
+          return;
+        }
+        
+        // Tentar reconectar automaticamente após desconexão
+        console.log('🔄 Tentando reconectar automaticamente...');
+        this.retryCount = 0; // Reset retry count para reconexão
+        
+        // Aguardar um pouco antes de tentar reconectar
+        setTimeout(async () => {
+          if (!this.isReady && !this.isInitializing && this.userId) {
+            console.log('🔄 Iniciando reconexão automática...');
+            await this.initialize();
+          }
+        }, 5000); // 5 segundos de delay
       });
 
       // Loading screen
@@ -503,10 +546,25 @@ class WhatsAppService {
         console.log(`📱 Carregando WhatsApp: ${percent}% - ${message}`);
       });
 
-      // Error handler
-      this.client.on('error', (error) => {
+      // Error handler - Tentar reconectar em erros críticos
+      this.client.on('error', async (error) => {
         console.error('\n❌ Erro no WhatsApp Client:', error.message);
         this.isReady = false;
+        
+        // Reconectar automaticamente em erros de conexão
+        if (error.message.includes('Connection') || 
+            error.message.includes('timeout') || 
+            error.message.includes('ECONNRESET') ||
+            error.message.includes('ENOTFOUND')) {
+          console.log('🔄 Erro de conexão detectado. Tentando reconectar...');
+          this.retryCount = 0; // Reset retry count
+          
+          setTimeout(async () => {
+            if (!this.isReady && !this.isInitializing && this.userId) {
+              await this.initialize();
+            }
+          }, 10000); // 10 segundos de delay para erros de conexão
+        }
       });
 
       // Initialize with error handling
