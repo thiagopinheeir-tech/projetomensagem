@@ -54,6 +54,9 @@ const automationRoutes = require('./routes/automations');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy (necessário para Railway e outros serviços que usam proxy reverso)
+app.set('trust proxy', true);
+
 // Middlewares
 app.use(helmet());
 const corsOrigins = process.env.CORS_ORIGIN 
