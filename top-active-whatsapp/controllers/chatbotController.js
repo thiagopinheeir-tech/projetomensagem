@@ -481,7 +481,7 @@ const toggleChatbot = async (req, res, next) => {
 
 const getStats = async (req, res, next) => {
   try {
-    const stats = await ConversationManager.getStats();
+    const stats = await ConversationManager.getStats(req.userId || null);
     
     res.json({
       success: true,
@@ -518,7 +518,7 @@ const getConversationHistory = async (req, res, next) => {
       });
     }
 
-    const history = await ConversationManager.getHistory(phone, limit);
+    const history = await ConversationManager.getHistory(phone, limit, req.userId || null);
     
     res.json({
       success: true,

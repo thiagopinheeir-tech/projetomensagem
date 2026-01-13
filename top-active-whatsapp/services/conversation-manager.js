@@ -1,34 +1,58 @@
 const { query } = require('../config/database');
+const { convertUserIdForTable } = require('../utils/userId-converter');
 
 class ConversationManager {
-  async saveMessage(phone, userMessage, aiResponse, chatbotId = null) {
+  async saveMessage(phone, userMessage, aiResponse, chatbotId = null, userId = null) {
     try {
       // Limpar número do telefone
       const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
       
+      // Converter userId se fornecido
+      let convertedUserId = null;
+      if (userId) {
+        convertedUserId = await convertUserIdForTable('conversations', userId);
+      }
+      
       await query(
-        `INSERT INTO conversations (phone, user_message, ai_response, chatbot_id, created_at) 
-         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
-        [cleanPhone, userMessage, aiResponse, chatbotId || null]
+        `INSERT INTO conversations (phone, user_message, ai_response, chatbot_id, user_id, created_at) 
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+        [cleanPhone, userMessage, aiResponse, chatbotId || null, convertedUserId]
       );
+      
+      console.log(`💾 Conversa salva: ${cleanPhone}${userId ? ` (user: ${userId})` : ''}`);
     } catch (error) {
       console.error('❌ Erro ao salvar mensagem:', error);
       throw error;
     }
   }
 
-  async getHistory(phone, limit = 10) {
+  async getHistory(phone, limit = 10, userId = null) {
     try {
       const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
       
-      const result = await query(
-        `SELECT user_message, ai_response, created_at
+      // Converter userId se fornecido
+      let convertedUserId = null;
+      if (userId) {
+        convertedUserId = await convertUserIdForTable('conversations', userId);
+      }
+      
+      let queryText = `SELECT user_message, ai_response, created_at
          FROM conversations 
-         WHERE phone = $1 
-         ORDER BY created_at DESC 
-         LIMIT $2`,
-        [cleanPhone, limit]
-      );
+         WHERE phone = $1`;
+      let params = [cleanPhone];
+      
+      // Adicionar filtro por userId se fornecido
+      if (convertedUserId !== null) {
+        queryText += ` AND user_id = $2`;
+        params.push(convertedUserId);
+        queryText += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+        params.push(limit);
+      } else {
+        queryText += ` ORDER BY created_at DESC LIMIT $2`;
+        params.push(limit);
+      }
+      
+      const result = await query(queryText, params);
 
       // Retornar em ordem cronológica (mais antigo primeiro)
       return result.rows.reverse().map(row => ({
@@ -42,18 +66,31 @@ class ConversationManager {
     }
   }
 
-  async getStats() {
+  async getStats(userId = null) {
     try {
-      const result = await query(
-        `SELECT 
+      // Converter userId se fornecido
+      let convertedUserId = null;
+      if (userId) {
+        convertedUserId = await convertUserIdForTable('conversations', userId);
+      }
+      
+      let queryText = `SELECT 
           COUNT(*) as total_conversations,
           COUNT(DISTINCT phone) as unique_contacts,
           DATE_TRUNC('day', created_at) as date
-         FROM conversations
-         GROUP BY DATE_TRUNC('day', created_at)
+         FROM conversations`;
+      
+      let params = [];
+      if (convertedUserId !== null) {
+        queryText += ` WHERE user_id = $1`;
+        params.push(convertedUserId);
+      }
+      
+      queryText += ` GROUP BY DATE_TRUNC('day', created_at)
          ORDER BY date DESC
-         LIMIT 30`
-      );
+         LIMIT 30`;
+
+      const result = await query(queryText, params);
 
       return result.rows;
     } catch (error) {
@@ -62,17 +99,52 @@ class ConversationManager {
     }
   }
 
-  async getRecentConversations(limit = 20) {
+  async getRecentConversations(limit = 20, userId = null) {
     try {
-      const result = await query(
-        `SELECT phone, user_message, ai_response, created_at
-         FROM conversations
-         ORDER BY created_at DESC
-         LIMIT $1`,
-        [limit]
-      );
+      // Converter userId se fornecido
+      let convertedUserId = null;
+      if (userId) {
+        convertedUserId = await convertUserIdForTable('conversations', userId);
+      }
+      
+      let queryText = `SELECT 
+          c.phone, 
+          c.user_message, 
+          c.ai_response, 
+          c.created_at,
+          c.id
+         FROM conversations c`;
+      
+      let params = [];
+      if (convertedUserId !== null) {
+        queryText += ` WHERE c.user_id = $1`;
+        params.push(convertedUserId);
+        queryText += ` ORDER BY c.created_at DESC LIMIT $2`;
+        params.push(limit);
+      } else {
+        queryText += ` ORDER BY c.created_at DESC LIMIT $1`;
+        params.push(limit);
+      }
 
-      return result.rows;
+      const result = await query(queryText, params);
+
+      // Agrupar por telefone e retornar formato esperado pelo frontend
+      const grouped = {};
+      result.rows.forEach(row => {
+        const phone = row.phone;
+        if (!grouped[phone] || new Date(row.created_at) > new Date(grouped[phone].lastMessageTime)) {
+          grouped[phone] = {
+            id: row.id || phone.replace(/\D/g, ''),
+            phone: phone,
+            lastMessage: row.user_message || row.ai_response,
+            lastMessageTime: row.created_at,
+            status: 'open',
+            unread: 0
+          };
+        }
+      });
+
+      return Object.values(grouped).slice(0, limit);
     } catch (error) {
       console.error('❌ Erro ao buscar conversas recentes:', error);
       return [];

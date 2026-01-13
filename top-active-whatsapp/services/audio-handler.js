@@ -19,7 +19,7 @@ const openai = process.env.OPENAI_API_KEY
  * 4. Salva no Supabase
  * 5. Broadcast real-time
  */
-async function handleAudioMessage(client, msg, chatbot, wsManager) {
+async function handleAudioMessage(client, msg, chatbot, wsManager, userId = null) {
   try {
     // Verificar se é áudio (hasMedia e type audio/ptt)
     if (!msg.hasMedia || (msg.type !== 'audio' && msg.type !== 'ptt')) {
@@ -81,14 +81,14 @@ async function handleAudioMessage(client, msg, chatbot, wsManager) {
       console.log(`✅ Transcrição: ${transcribedText.substring(0, 100)}...`);
 
       // 4. Buscar histórico da conversa
-      const history = await ConversationManager.getHistory(cleanPhone, 10);
+      const history = await ConversationManager.getHistory(cleanPhone, 10, userId);
 
       // 5. Gerar resposta com GPT (JP Financeira) - usar texto transcrito (sem [ÁUDIO])
       console.log('🤖 Gerando resposta GPT...');
       const aiResponse = await chatbot.generateResponse(transcribedText, history);
 
       // 6. Salvar mensagem e resposta usando ConversationManager (já salva no Supabase)
-      await ConversationManager.saveMessage(cleanPhone, audioMessageText, aiResponse);
+      await ConversationManager.saveMessage(cleanPhone, audioMessageText, aiResponse, null, userId);
 
       // 7. Responder ao cliente
       await msg.reply(aiResponse);

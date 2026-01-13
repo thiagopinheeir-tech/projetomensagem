@@ -654,7 +654,7 @@ class WhatsAppService {
         }
 
         // 🔊 PROCESSAR ÁUDIO PRIMEIRO
-        const audioProcessed = await handleAudioMessage(this.client, msg, this.chatbot, wsManager);
+        const audioProcessed = await handleAudioMessage(this.client, msg, this.chatbot, wsManager, this.activeUserId || this.userId);
         if (audioProcessed) {
           return; // Áudio processado, não processar como texto
         }
