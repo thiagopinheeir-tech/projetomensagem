@@ -110,11 +110,41 @@ try {
   console.error('❌ Erro ao analisar URL:', error.message);
 }
 
+// Log detalhado antes de criar o pool
+console.log('🔍 Criando pool PostgreSQL...');
+console.log('   Connection string length:', connectionString.length);
+console.log('   Connection string (mascarada):', connectionString.replace(/:[^:@]+@/, ':****@'));
+
+// Tentar parsear a URL manualmente para verificar
+try {
+  const url = new URL(connectionString.replace('postgresql://', 'http://'));
+  console.log('🔍 URL parseada manualmente:');
+  console.log('   Protocol:', url.protocol);
+  console.log('   Username:', url.username);
+  console.log('   Password:', url.password ? '****' : 'não encontrada');
+  console.log('   Hostname:', url.hostname);
+  console.log('   Port:', url.port);
+  console.log('   Pathname:', url.pathname);
+  console.log('   Search:', url.search);
+} catch (error) {
+  console.error('❌ Erro ao parsear URL manualmente:', error.message);
+}
+
 const pool = new Pool({
   connectionString: connectionString,
   ssl: connectionString && connectionString.includes('localhost') ? false : {
     rejectUnauthorized: false
   }
+});
+
+// Log após criar o pool para verificar configuração
+pool.on('connect', (client) => {
+  console.log('✅ Cliente PostgreSQL conectado');
+});
+
+pool.on('error', (err, client) => {
+  console.error('❌ Erro no pool PostgreSQL:', err.message);
+  console.error('   Hostname que causou erro:', err.hostname || 'não especificado');
 });
 
 pool.on('error', (err) => {
