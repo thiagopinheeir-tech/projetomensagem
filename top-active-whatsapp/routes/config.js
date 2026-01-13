@@ -2,82 +2,101 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
 const { query } = require('../config/database');
+const { supabase, db, isConfigured } = require('../config/supabase');
 const crypto = require('crypto');
+const encryption = require('../services/encryption');
+const whatsappManager = require('../services/whatsapp-manager');
 
 // Chave de criptografia (deve estar no .env em produção)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-const ALGORITHM = 'aes-256-cbc';
-
-function encrypt(text) {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'hex'), iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
-
-function decrypt(text) {
-  const parts = text.split(':');
-  const iv = Buffer.from(parts.shift(), 'hex');
-  const encryptedText = Buffer.from(parts.join(':'), 'hex');
-  const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'hex'), iv);
-  let decrypted = decipher.update(encryptedText);
-  decrypted = Buffer.concat([decrypted, decipher.final()]);
-  return decrypted.toString();
-}
 
 // Obter configuração de IA do usuário
 router.get('/ai', authMiddleware, async (req, res, next) => {
   try {
     const userId = req.user.id;
+    let config = null;
 
-    const result = await query(
-      'SELECT * FROM config_ai WHERE user_id = $1',
-      [userId]
-    );
-
-    if (result.rows.length === 0) {
-      // Retornar configuração padrão
-      return res.json({
-        success: true,
-        config: {
-          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-          temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
-          max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '300'),
-          custom_prompt: null,
-          has_key: !!process.env.OPENAI_API_KEY,
-          key_preview: process.env.OPENAI_API_KEY 
-            ? `${process.env.OPENAI_API_KEY.substring(0, 10)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`
-            : null
+    // Tentar carregar do Supabase primeiro
+    if (isConfigured) {
+      const { data: supabaseConfig, error } = await db.getAPIConfig(userId);
+      if (!error && supabaseConfig) {
+        config = {
+          model: supabaseConfig.model || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          temperature: supabaseConfig.temperature || parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
+          max_tokens: supabaseConfig.max_tokens || parseInt(process.env.OPENAI_MAX_TOKENS || '300'),
+          has_key: !!supabaseConfig.openai_api_key || !!process.env.OPENAI_API_KEY,
+          key_preview: null
+        };
+        
+        // Preview da chave
+        if (supabaseConfig.openai_api_key) {
+          try {
+            // Tentar descriptografar se estiver criptografada
+            let key = supabaseConfig.openai_api_key;
+            if (key.includes(':')) {
+              key = encryption.decrypt(key);
+            }
+            config.key_preview = `${key.substring(0, 10)}...${key.substring(key.length - 4)}`;
+          } catch (error) {
+            // Se não conseguir descriptografar, usar como está
+            config.key_preview = `${supabaseConfig.openai_api_key.substring(0, 10)}...${supabaseConfig.openai_api_key.substring(supabaseConfig.openai_api_key.length - 4)}`;
+          }
+        } else if (process.env.OPENAI_API_KEY) {
+          config.key_preview = `${process.env.OPENAI_API_KEY.substring(0, 10)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`;
         }
-      });
+      }
     }
 
-    const config = result.rows[0];
-    const hasKey = !!config.openai_key_encrypted;
-    let keyPreview = null;
+    // Fallback: carregar do PostgreSQL local
+    if (!config) {
+      const result = await query(
+        'SELECT * FROM config_ai WHERE user_id = $1',
+        [userId]
+      );
 
-    if (hasKey) {
-      try {
-        const decryptedKey = decrypt(config.openai_key_encrypted);
-        keyPreview = `${decryptedKey.substring(0, 10)}...${decryptedKey.substring(decryptedKey.length - 4)}`;
-      } catch (error) {
-        console.error('Erro ao descriptografar chave:', error);
+      if (result.rows.length === 0) {
+        // Retornar configuração padrão
+        return res.json({
+          success: true,
+          config: {
+            model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+            temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7'),
+            max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS || '300'),
+            has_key: !!process.env.OPENAI_API_KEY,
+            key_preview: process.env.OPENAI_API_KEY 
+              ? `${process.env.OPENAI_API_KEY.substring(0, 10)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`
+              : null
+          }
+        });
       }
-    } else if (process.env.OPENAI_API_KEY) {
-      keyPreview = `${process.env.OPENAI_API_KEY.substring(0, 10)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`;
+
+      const dbConfig = result.rows[0];
+      const hasKey = !!dbConfig.openai_key_encrypted;
+      let keyPreview = null;
+
+      if (hasKey) {
+        try {
+          const decryptedKey = encryption.decrypt(dbConfig.openai_key_encrypted);
+          keyPreview = `${decryptedKey.substring(0, 10)}...${decryptedKey.substring(decryptedKey.length - 4)}`;
+        } catch (error) {
+          console.error('Erro ao descriptografar chave:', error);
+        }
+      } else if (process.env.OPENAI_API_KEY) {
+        keyPreview = `${process.env.OPENAI_API_KEY.substring(0, 10)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`;
+      }
+
+      config = {
+        model: dbConfig.model,
+        temperature: parseFloat(dbConfig.temperature),
+        max_tokens: parseInt(dbConfig.max_tokens),
+        has_key: hasKey,
+        key_preview: keyPreview
+      };
     }
 
     res.json({
       success: true,
-      config: {
-        model: config.model,
-        temperature: parseFloat(config.temperature),
-        max_tokens: parseInt(config.max_tokens),
-        custom_prompt: config.custom_prompt,
-        has_key: hasKey,
-        key_preview: keyPreview
-      }
+      config: config
     });
   } catch (error) {
     next(error);
@@ -88,7 +107,7 @@ router.get('/ai', authMiddleware, async (req, res, next) => {
 router.put('/ai', authMiddleware, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { openai_key, model, temperature, max_tokens, custom_prompt } = req.body;
+    const { openai_key, model, temperature, max_tokens } = req.body;
 
     // Validar
     if (model && !['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'].includes(model)) {
@@ -121,7 +140,7 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
           message: 'Chave OpenAI inválida (deve começar com sk-)'
         });
       }
-      encryptedKey = encrypt(openai_key.trim());
+      encryptedKey = encryption.encrypt(openai_key.trim());
     }
 
     // Montar campos para UPDATE
@@ -130,13 +149,37 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
     if (model) updateFields.push('model = EXCLUDED.model');
     if (temperature !== undefined) updateFields.push('temperature = EXCLUDED.temperature');
     if (max_tokens) updateFields.push('max_tokens = EXCLUDED.max_tokens');
-    if (custom_prompt !== undefined) updateFields.push('custom_prompt = EXCLUDED.custom_prompt');
     updateFields.push('updated_at = CURRENT_TIMESTAMP');
 
-    // Usar UPSERT (INSERT ... ON CONFLICT)
-    const result = await query(
-      `INSERT INTO config_ai (user_id, openai_key_encrypted, model, temperature, max_tokens, custom_prompt, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+    // Salvar no Supabase primeiro
+    if (isConfigured) {
+      const apiConfigData = {
+        openai_key_encrypted: encryptedKey,
+        model: model || 'gpt-4o-mini',
+        temperature: temperature !== undefined ? temperature : 0.7,
+        max_tokens: max_tokens || 300
+      };
+      
+      // Remover campos undefined
+      Object.keys(apiConfigData).forEach(key => {
+        if (apiConfigData[key] === undefined || apiConfigData[key] === null) {
+          delete apiConfigData[key];
+        }
+      });
+      
+      const { error: supabaseError } = await db.saveAPIConfig(userId, apiConfigData);
+      if (supabaseError) {
+        console.error('Erro ao salvar no Supabase:', supabaseError);
+        // Continuar mesmo se falhar no Supabase
+      } else {
+        console.log('✅ Configuração de API salva no Supabase');
+      }
+    }
+    
+    // Fallback: salvar no PostgreSQL local
+    await query(
+      `INSERT INTO config_ai (user_id, openai_key_encrypted, model, temperature, max_tokens, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO UPDATE SET
          ${updateFields.join(', ')}`,
       [
@@ -144,29 +187,25 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
         encryptedKey,
         model || 'gpt-4o-mini',
         temperature !== undefined ? temperature : 0.7,
-        max_tokens || 300,
-        custom_prompt || null
+        max_tokens || 300
       ]
     );
 
-    // Atualizar chatbot em tempo real
-    const whatsapp = require('../services/whatsapp');
-    if (whatsapp.chatbot) {
-      const updateConfig = {};
-      if (model) updateConfig.model = model;
-      if (temperature !== undefined) updateConfig.temperature = temperature;
-      if (max_tokens) updateConfig.maxTokens = max_tokens;
-      if (custom_prompt !== undefined) updateConfig.specialInstructions = custom_prompt;
-
-      if (Object.keys(updateConfig).length > 0) {
-        whatsapp.updateChatbotConfig(updateConfig);
-      }
-
-      // Se mudou a chave, recriar cliente OpenAI
-      if (encryptedKey && whatsapp.chatbot) {
-        // Reinicializar chatbot com nova chave
-        process.env.OPENAI_API_KEY = openai_key.trim();
-        whatsapp.initChatbot();
+    // Atualizar chatbot em tempo real (instância do usuário)
+    if (encryptedKey && openai_key) {
+      // Salvar API key na tabela user_api_keys
+      await query(
+        `INSERT INTO user_api_keys (user_id, provider, api_key_encrypted, is_active)
+         VALUES ($1, 'openai', $2, true)
+         ON CONFLICT (user_id, provider) 
+         DO UPDATE SET api_key_encrypted = $2, is_active = true, updated_at = CURRENT_TIMESTAMP`,
+        [userId, encryptedKey]
+      );
+      
+      // Reinicializar chatbot da instância do usuário com nova chave
+      const instance = whatsappManager.getInstance(userId);
+      if (instance) {
+        await instance.initChatbot(userId);
       }
     }
 

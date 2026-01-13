@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
-const whatsapp = require('../services/whatsapp');
+const { requireUserId } = require('../middleware/data-isolation');
+const whatsappManager = require('../services/whatsapp-manager');
 const { query } = require('../config/database');
 
 // Enviar mensagem simples
-router.post('/send-simple', authMiddleware, async (req, res) => {
+router.post('/send-simple', authMiddleware, requireUserId, async (req, res) => {
   try {
     const { phone, message } = req.body;
-    const userId = req.user.id;
+    const userId = req.userId;
 
     // Validações
     if (!phone || !message) {
@@ -18,15 +19,16 @@ router.post('/send-simple', authMiddleware, async (req, res) => {
       });
     }
 
-    if (!whatsapp.getStatus().ready) {
+    // Verificar se WhatsApp está conectado para este usuário
+    if (!whatsappManager.isReady(userId)) {
       return res.status(503).json({ 
         success: false, 
-        message: 'WhatsApp não conectado. Escaneie o QR code primeiro.' 
+        message: 'WhatsApp não conectado. Conecte seu WhatsApp primeiro.' 
       });
     }
 
-    // Enviar mensagem via WhatsApp
-    const whatsappResult = await whatsapp.sendMessage(phone, message);
+    // Enviar mensagem via WhatsApp (instância do usuário)
+    const whatsappResult = await whatsappManager.sendMessage(userId, phone, message);
     
     // Salvar no banco de dados
     const dbResult = await query(
@@ -75,34 +77,51 @@ router.post('/send-simple', authMiddleware, async (req, res) => {
 });
 
 // Status do WhatsApp
-router.get('/status', authMiddleware, (req, res) => {
+router.get('/status', authMiddleware, requireUserId, async (req, res) => {
   try {
-    const status = whatsapp.getStatus();
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/messages.js:82',message:'GET /status ENTRY',data:{userId:req.userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F1'})}).catch(()=>{});
+    // #endregion
+    const status = await whatsappManager.getStatus(req.userId);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/messages.js:85',message:'GET /status EXIT',data:{statusReady:status.isReady,statusStatus:status.status,hasQRCode:!!status.qrCode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F1'})}).catch(()=>{});
+    // #endregion
     res.json({
       success: true,
-      connected: status.ready,
-      authenticated: status.authenticated,
-      ready: status.ready,
+      connected: status.isReady || status.status === 'ready',
+      authenticated: status.isReady || status.status === 'ready',
+      ready: status.isReady || status.status === 'ready',
       hasQRCode: !!status.qrCode
     });
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/messages.js:95',message:'GET /status ERROR',data:{errorMessage:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F1'})}).catch(()=>{});
+    // #endregion
+    console.error('❌ Erro ao obter status do WhatsApp:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao obter status do WhatsApp'
+      message: 'Erro ao obter status do WhatsApp: ' + error.message
     });
   }
 });
 
 // Obter QR Code (para exibir no frontend)
-router.get('/qr', authMiddleware, (req, res) => {
+router.get('/qr', authMiddleware, requireUserId, async (req, res) => {
   try {
-    const qrCode = whatsapp.getQRCode();
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/messages.js:101',message:'GET /qr ENTRY',data:{userId:req.userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F2'})}).catch(()=>{});
+    // #endregion
+    const qrCode = await whatsappManager.getQRCode(req.userId);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/messages.js:104',message:'GET /qr EXIT',data:{hasQRCode:!!qrCode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F2'})}).catch(()=>{});
+    // #endregion
     
     if (!qrCode) {
+      const status = await whatsappManager.getStatus(req.userId);
       return res.json({
         success: false,
         message: 'Nenhum QR code disponível. WhatsApp já pode estar conectado ou aguardando nova autenticação.',
-        connected: whatsapp.getStatus().ready
+        connected: status.isReady || status.status === 'ready'
       });
     }
 
@@ -111,9 +130,13 @@ router.get('/qr', authMiddleware, (req, res) => {
       qrCode: qrCode
     });
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/messages.js:119',message:'GET /qr ERROR',data:{errorMessage:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F2'})}).catch(()=>{});
+    // #endregion
+    console.error('❌ Erro ao obter QR code:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao obter QR code'
+      message: 'Erro ao obter QR code: ' + error.message
     });
   }
 });
