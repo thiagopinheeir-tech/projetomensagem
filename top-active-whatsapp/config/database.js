@@ -74,6 +74,16 @@ if (connectionString && connectionString.includes('supabase')) {
   }
 }
 
+// Log da URL final antes de criar o pool
+console.log('🔍 URL final para conexão (primeiros 100 chars):', connectionString.substring(0, 100));
+console.log('🔍 URL completa (mascarada para segurança):', connectionString.replace(/:[^:@]+@/, ':****@'));
+
+// Verificar se a URL está completa
+if (!connectionString.includes('@db.') && !connectionString.includes('@pooler.')) {
+  console.error('❌ ERRO: URL não contém hostname válido do Supabase!');
+  console.error('   URL atual:', connectionString.substring(0, 150));
+}
+
 const pool = new Pool({
   connectionString: connectionString,
   ssl: connectionString && connectionString.includes('localhost') ? false : {
