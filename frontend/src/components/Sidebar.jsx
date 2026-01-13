@@ -77,6 +77,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
             JT DEV NOCODE 2.0
           </p>
+          {/* Build timestamp: 2026-01-13T15:30:00Z - Menu reorganizado */}
         </div>
       </aside>
     </>
