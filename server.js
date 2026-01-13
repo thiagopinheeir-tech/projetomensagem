@@ -58,15 +58,29 @@ const PORT = process.env.PORT || 5000;
 app.set('trust proxy', true);
 
 // Middlewares
-app.use(helmet());
-const corsOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000', 'http://localhost:5173'];
-
-app.use(cors({
-  origin: corsOrigins,
-  credentials: true
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
+// Configurar CORS
+let corsOptions = {
+  credentials: true
+};
+
+if (process.env.CORS_ORIGIN) {
+  if (process.env.CORS_ORIGIN.trim() === '*') {
+    // Permitir todas as origens
+    corsOptions.origin = true;
+  } else {
+    // Permitir origens específicas (separadas por vírgula)
+    corsOptions.origin = process.env.CORS_ORIGIN.split(',').map(origin => origin.trim());
+  }
+} else {
+  // Default: localhost para desenvolvimento
+  corsOptions.origin = ['http://localhost:3000', 'http://localhost:5173'];
+}
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(logger);
 
