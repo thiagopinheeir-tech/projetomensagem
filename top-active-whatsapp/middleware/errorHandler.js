@@ -5,7 +5,7 @@ module.exports = (err, req, res, next) => {
   const message = err.message || 'Internal server error';
 
   const errorResponse = {
-    success: false,
+    success: false, 
     message: message
   };
 
