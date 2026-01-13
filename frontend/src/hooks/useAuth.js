@@ -37,7 +37,7 @@ export const useAuth = () => {
   const register = async (email, password, full_name, company_name) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      console.log('🔍 Tentando registrar usuário:', {
+      // Registrando usuário...
         apiUrl,
         endpoint: `${apiUrl}/api/auth/register`,
         email: email?.substring(0, 20)
@@ -50,7 +50,7 @@ export const useAuth = () => {
         company_name,
       });
       
-      console.log('✅ Resposta recebida:', response.data);
+      // Usuário registrado com sucesso
       
       if (!response.data.success) {
         return { success: false, error: response.data.message || 'Erro ao criar conta' };

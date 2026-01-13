@@ -43,13 +43,13 @@ const Dashboard = () => {
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log('🔌 WebSocket conectado!');
+      // WebSocket conectado
       setLoading(false);
     };
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      console.log('📥 Mensagem recebida:', message);
+      // Mensagem recebida via WebSocket
 
       switch (message.type) {
         case 'init':
@@ -59,12 +59,12 @@ const Dashboard = () => {
           setConversations(prev => [message.data, ...prev]);
           break;
         case 'qr':
-          console.log('🔍 QR code recebido:', message.data.qr);
+          // QR code recebido
           setQrCode(message.data.qr);
           break;
         case 'status':
           // Poderíamos usar isso para mostrar o status da conexão do WhatsApp
-          console.log('Status do WhatsApp:', message.data.status);
+          // Status do WhatsApp atualizado
           if (message.data.status === 'connected') {
             setQrCode(null); // Limpa o QR code quando conectado
           }
@@ -75,7 +75,7 @@ const Dashboard = () => {
     };
 
     ws.onclose = () => {
-      console.log('🔌 WebSocket desconectado.');
+      // WebSocket desconectado
     };
 
     ws.onerror = (error) => {

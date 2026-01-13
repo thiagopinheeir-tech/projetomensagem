@@ -4,11 +4,6 @@ import Badge from './ui/Badge';
 import Button from './ui/Button';
 
 export default function RecentConversations({ conversations, loading }) {
-  
-  // Debug para verificar o que está chegando
-  if (conversations && conversations.length > 0) {
-    console.log('💬 RecentConversations renderizando:', conversations[0]);
-  }
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Agora';
@@ -27,8 +22,7 @@ export default function RecentConversations({ conversations, loading }) {
   };
 
   const deleteConversation = async (id) => {
-    // A lógica de exclusão precisará ser ajustada para funcionar com o backend
-    console.log(`Deletar conversa ${id}`);
+    // TODO: Implementar lógica de exclusão no backend
   };
 
   return (

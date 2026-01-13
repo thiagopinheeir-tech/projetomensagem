@@ -10,17 +10,17 @@ const getApiUrl = () => {
   
   // Remover underscore ou outros caracteres inválidos no início
   if (cleanUrl.startsWith('_') || cleanUrl.startsWith(' ')) {
-    console.warn('⚠️ URL do backend tem caracteres inválidos no início:', apiUrl);
+    // URL do backend tinha caracteres inválidos, removidos automaticamente
     cleanUrl = cleanUrl.replace(/^[_\s]+/, '');
   }
   
   // Garantir que começa com http:// ou https://
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-    console.warn('⚠️ URL do backend não começa com http:// ou https://:', apiUrl);
+    // URL do backend não tinha protocolo, adicionado https:// automaticamente
     cleanUrl = `https://${cleanUrl}`;
   }
   
-  console.log('🔗 API URL configurada:', cleanUrl);
+  // API URL configurada e validada
   
   return cleanUrl;
 };

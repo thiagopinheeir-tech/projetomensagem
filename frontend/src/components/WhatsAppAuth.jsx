@@ -20,7 +20,6 @@ export default function WhatsAppAuth({ qrCode: qrCodeFromProp }) {
 
   useEffect(() => {
     if (qrCodeFromProp) {
-      console.log('📱 QR code recebido via prop:', qrCodeFromProp);
       setQrCode(qrCodeFromProp);
       setStatus('Escaneie o QR Code com seu WhatsApp');
     }
@@ -46,11 +45,9 @@ export default function WhatsAppAuth({ qrCode: qrCodeFromProp }) {
 
   const generateQRCode = async () => {
     try {
-      console.log('🔄 Solicitando conexão WhatsApp...');
       setLoading(true);
       setStatus('Iniciando conexão...');
       const response = await api.post('/api/whatsapp/connect');
-      console.log('✅ Resposta do connect:', response.data);
       setStatus('Aguardando QR Code...');
       // O QR code virá pelo WebSocket ou pode ser obtido via /api/whatsapp/qr
       // Buscar QR code após alguns segundos
