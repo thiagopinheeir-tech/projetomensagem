@@ -4,23 +4,78 @@
 
 ### Opção A: Usar Supabase (Recomendado - Gratuito)
 
-1. **Acesse:** https://supabase.com
+#### Método 1: Via Settings → Database
+
+1. **Acesse:** https://supabase.com/dashboard
 2. **Faça login** na sua conta
 3. **Selecione seu projeto** (ou crie um novo)
-4. **Vá em:** Settings (ícone de engrenagem) → **Database**
-5. **Role até:** "Connection string"
-6. **Selecione:** "URI" (não "Session mode" ou "Transaction mode")
-7. **Copie a URL** que aparece, exemplo:
+4. **No menu lateral esquerdo, clique em:** ⚙️ **Settings**
+5. **Clique em:** **Database** (no submenu à esquerda)
+6. **Procure por uma das seguintes seções:**
+   - **"Connection string"** ou
+   - **"Connection pooling"** ou
+   - **"Database URL"** ou
+   - **"Connection info"**
+7. **Se encontrar "Connection string":**
+   - Selecione a aba **"URI"** (não "Session mode" ou "Transaction mode")
+   - Copie a URL que aparece
+8. **Se NÃO encontrar "Connection string", use o Método 2 abaixo**
+
+#### Método 2: Montar a URL Manualmente
+
+Se não encontrar a connection string pronta, monte você mesmo:
+
+1. **Acesse:** Settings → Database
+2. **Anote estas informações:**
+   - **Host:** Procure por "Host" ou "Database host" (ex: `db.xxxxx.supabase.co`)
+   - **Port:** Procure por "Port" (geralmente `5432` ou `6543`)
+   - **Database name:** Geralmente é `postgres`
+   - **User:** Geralmente é `postgres`
+   - **Password:** Em "Database password" (se não souber, clique em "Reset database password")
+
+3. **Monte a URL no formato:**
    ```
-   postgresql://postgres:[SENHA]@db.xxxxx.supabase.co:5432/postgres
+   postgresql://[USER]:[PASSWORD]@[HOST]:[PORT]/[DATABASE]
    ```
-8. **⚠️ IMPORTANTE:** Substitua `[SENHA]` pela senha real do seu banco
-   - A senha está em: Settings → Database → Database password
-   - Ou você pode resetar a senha se não souber
+
+**Exemplo:**
+```
+postgresql://postgres:SUA_SENHA@db.abcdefghijklmnop.supabase.co:5432/postgres
+```
+
+#### Método 3: Via Connection Pooling (Recomendado para produção)
+
+1. **Acesse:** Settings → Database
+2. **Procure por:** "Connection pooling" ou "Pooler"
+3. **Use a URL do Pooler** (geralmente porta `6543` ou `5432`)
+4. **Formato:**
+   ```
+   postgresql://postgres.xxxxx:SUA_SENHA@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
+
+#### Método 4: Via API Settings (Alternativa)
+
+1. **Acesse:** Settings → API
+2. **Procure por:** "Database URL" ou informações de conexão
+3. **Algumas vezes a URL aparece aqui também**
+
+---
+
+### ⚠️ IMPORTANTE: Substituir a Senha
+
+**Independente do método, você precisa:**
+1. **Encontrar a senha do banco:**
+   - Settings → Database → **"Database password"**
+   - Se não souber, clique em **"Reset database password"**
+   - ⚠️ Anote a senha em local seguro!
+
+2. **Substituir na URL:**
+   - Se a URL tiver `[YOUR-PASSWORD]` ou `[PASSWORD]`, substitua pela senha real
+   - Se a URL já tiver uma senha, verifique se está correta
 
 **URL final deve ser algo assim:**
 ```
-postgresql://postgres.xxxxx:SUA_SENHA_AQUI@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+postgresql://postgres.xxxxx:SUA_SENHA_REAL_AQUI@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 ```
 
 ---
