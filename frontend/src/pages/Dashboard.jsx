@@ -25,13 +25,23 @@ const Dashboard = () => {
 
     // Obter URL do backend (usar variável de ambiente ou localhost)
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const WS_URL = API_URL.replace('https://', 'wss://').replace('http://', 'ws://').replace('/api', '');
     const WS_PORT = import.meta.env.VITE_WS_PORT || '5001';
     
-    // Conectar ao WebSocket (já filtra por userId automaticamente)
-    const wsUrl = WS_URL.includes('localhost') 
-      ? `ws://localhost:${WS_PORT}?user=${user.id}`
-      : `${WS_URL}:${WS_PORT}?user=${user.id}`;
+    // Construir URL do WebSocket
+    let wsUrl;
+    if (API_URL.includes('localhost')) {
+      // Local: usar porta explícita
+      wsUrl = `ws://localhost:${WS_PORT}?user=${user.id}`;
+    } else {
+      // Produção (Railway): usar mesma URL do backend, mas com protocolo ws/wss
+      // Railway expõe apenas uma porta pública, então WebSocket deve usar a mesma URL
+      // Mas como WebSocket está em porta diferente, precisamos usar a URL base + porta
+      const url = new URL(API_URL);
+      const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      // Para Railway, o WebSocket precisa estar na mesma porta ou usar um serviço separado
+      // Por enquanto, vamos tentar usar a mesma URL base (Railway pode fazer proxy)
+      wsUrl = `${wsProtocol}//${url.hostname}:${WS_PORT}?user=${user.id}`;
+    }
     
     const ws = new WebSocket(wsUrl);
 
