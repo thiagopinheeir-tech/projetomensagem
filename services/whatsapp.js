@@ -232,10 +232,16 @@ class WhatsAppService {
   }
 
   async initialize() {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:234',message:'initialize() called',data:{userId:this.userId,hasUserId:!!this.userId,stack:new Error().stack.split('\n').slice(1,5).join('|')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // NÃO inicializar automaticamente sem userId (evitar inicialização no servidor)
     if (!this.userId) {
       console.warn('⚠️ [WhatsAppService] Tentativa de inicializar sem userId. Ignorando...');
       console.warn('💡 WhatsApp deve ser inicializado apenas via /api/whatsapp/connect com userId válido');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:239',message:'initialize() blocked - no userId',data:{userId:this.userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       return;
     }
 
