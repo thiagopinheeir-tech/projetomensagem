@@ -55,7 +55,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Trust proxy (necessário para Railway e outros serviços que usam proxy reverso)
-app.set('trust proxy', true);
+// Usar 1 ao invés de true para ser mais seguro (apenas 1 hop)
+app.set('trust proxy', 1);
 
 // Middlewares
 app.use(helmet({
