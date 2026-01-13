@@ -86,6 +86,30 @@ if (!connectionString.includes('@db.') && !connectionString.includes('@pooler.')
   console.log('✅ URL contém hostname válido do Supabase');
 }
 
+// Extrair e validar hostname da URL para debug
+try {
+  const urlMatch = connectionString.match(/@([^:]+):/);
+  if (urlMatch) {
+    const hostname = urlMatch[1];
+    console.log('🔍 Hostname extraído da URL:', hostname);
+    
+    if (hostname === 'base' || hostname.length < 5) {
+      console.error('❌ ERRO CRÍTICO: Hostname inválido detectado!');
+      console.error('   Hostname extraído:', hostname);
+      console.error('   URL completa (primeiros 150 chars):', connectionString.substring(0, 150));
+      console.error('   ⚠️ A URL pode estar sendo parseada incorretamente!');
+    } else if (hostname.includes('pooler.supabase.com') || hostname.includes('db.') || hostname.includes('aws-')) {
+      console.log('✅ Hostname válido do Supabase detectado:', hostname);
+    } else {
+      console.warn('⚠️ Hostname não reconhecido como Supabase:', hostname);
+    }
+  } else {
+    console.error('❌ Não foi possível extrair hostname da URL!');
+  }
+} catch (error) {
+  console.error('❌ Erro ao analisar URL:', error.message);
+}
+
 const pool = new Pool({
   connectionString: connectionString,
   ssl: connectionString && connectionString.includes('localhost') ? false : {
