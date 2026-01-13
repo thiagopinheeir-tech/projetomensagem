@@ -78,10 +78,12 @@ if (connectionString && connectionString.includes('supabase')) {
 console.log('🔍 URL final para conexão (primeiros 100 chars):', connectionString.substring(0, 100));
 console.log('🔍 URL completa (mascarada para segurança):', connectionString.replace(/:[^:@]+@/, ':****@'));
 
-// Verificar se a URL está completa
-if (!connectionString.includes('@db.') && !connectionString.includes('@pooler.')) {
+// Verificar se a URL está completa (aceitar tanto db. quanto pooler.)
+if (!connectionString.includes('@db.') && !connectionString.includes('@pooler.') && !connectionString.includes('@aws-')) {
   console.error('❌ ERRO: URL não contém hostname válido do Supabase!');
   console.error('   URL atual:', connectionString.substring(0, 150));
+} else {
+  console.log('✅ URL contém hostname válido do Supabase');
 }
 
 const pool = new Pool({
