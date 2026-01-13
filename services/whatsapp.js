@@ -13,6 +13,9 @@ const { query } = require('../config/database');
 
 class WhatsAppService {
   constructor(userId = null) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:15',message:'WhatsAppService constructor',data:{userId:userId,hasUserId:!!userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     this.userId = userId ? String(userId) : null;
     this.client = null;
     this.qrCode = null;
@@ -32,6 +35,9 @@ class WhatsAppService {
     this.authPath = this.userId 
       ? path.join(process.cwd(), '.wwebjs_auth', `user_${this.userId}`)
       : path.join(process.cwd(), '.wwebjs_auth', 'default');
+    
+    // NUNCA inicializar automaticamente no construtor
+    // Inicialização só deve acontecer via initialize() com userId válido
   }
 
   /**
