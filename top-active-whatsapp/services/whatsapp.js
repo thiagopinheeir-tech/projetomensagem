@@ -317,58 +317,74 @@ class WhatsAppService {
       console.log(`   Platform: ${process.platform}`);
       console.log(`   Chromium path a usar: ${chromiumPath || 'não definido'}`);
       
-      if (chromiumPath) {
-        const fs = require('fs');
-        if (fs.existsSync(chromiumPath)) {
-          puppeteerConfig.executablePath = chromiumPath;
-          console.log(`✅ [WhatsApp] Chromium encontrado e configurado: ${chromiumPath}`);
-        } else {
-          console.error(`❌ [WhatsApp] Chromium path configurado mas arquivo não existe: ${chromiumPath}`);
-          console.error(`   Tentando encontrar Chromium em outros locais...`);
-          
-          // Tentar encontrar automaticamente
-          const commonPaths = [
-            '/usr/bin/chromium',
-            '/usr/bin/chromium-browser',
-            '/usr/bin/google-chrome',
-            '/usr/bin/google-chrome-stable'
-          ];
-          
-          for (const path of commonPaths) {
+      const fs = require('fs');
+      const { execSync } = require('child_process');
+      
+      // Sempre tentar encontrar o Chromium, mesmo se a variável estiver configurada
+      let foundChromium = null;
+      
+      if (chromiumPath && fs.existsSync(chromiumPath)) {
+        foundChromium = chromiumPath;
+        console.log(`✅ [WhatsApp] Chromium encontrado no caminho configurado: ${chromiumPath}`);
+      } else {
+        if (chromiumPath) {
+          console.warn(`⚠️ [WhatsApp] Chromium path configurado mas não encontrado: ${chromiumPath}`);
+        }
+        
+        console.log(`🔍 [WhatsApp] Procurando Chromium em locais comuns...`);
+        
+        // Lista completa de possíveis caminhos
+        const searchPaths = [
+          '/usr/bin/chromium',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/google-chrome',
+          '/usr/bin/google-chrome-stable',
+          '/snap/bin/chromium',
+          '/opt/google/chrome/chrome',
+          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' // macOS (caso contrário)
+        ];
+        
+        // Tentar usar 'which' ou 'whereis' primeiro
+        try {
+          const whichResult = execSync('which chromium chromium-browser google-chrome 2>/dev/null | head -1', { 
+            encoding: 'utf8',
+            timeout: 2000 
+          }).trim();
+          if (whichResult && fs.existsSync(whichResult)) {
+            foundChromium = whichResult;
+            console.log(`✅ [WhatsApp] Chromium encontrado via 'which': ${whichResult}`);
+          }
+        } catch (e) {
+          console.log(`   'which' não encontrou Chromium, tentando caminhos diretos...`);
+        }
+        
+        // Se 'which' não funcionou, tentar caminhos diretos
+        if (!foundChromium) {
+          for (const path of searchPaths) {
             if (fs.existsSync(path)) {
-              puppeteerConfig.executablePath = path;
+              foundChromium = path;
               console.log(`✅ [WhatsApp] Chromium encontrado em: ${path}`);
               break;
             }
           }
+        }
+        
+        if (!foundChromium) {
+          console.error('❌ [WhatsApp] Chromium não encontrado em nenhum local!');
+          console.error('   Possíveis causas:');
+          console.error('   1. nixpacks.toml não está sendo usado pelo Railway');
+          console.error('   2. Chromium não foi instalado durante o build');
+          console.error('   3. Chromium está em um caminho diferente');
+          console.error('   💡 Solução: Verifique os logs de build do Railway para ver se o Chromium foi instalado');
           
-          if (!puppeteerConfig.executablePath) {
-            console.error('❌ [WhatsApp] Chromium não encontrado em nenhum local!');
-            console.error('   Verifique se o nixpacks.toml instalou o Chromium corretamente.');
-          }
+          // Última tentativa: deixar o Puppeteer baixar o Chrome automaticamente
+          console.log('   ⚠️ Tentando usar Chrome baixado pelo Puppeteer (pode falhar no Railway)...');
+          delete puppeteerConfig.executablePath;
         }
-      } else if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
-        // Tentar encontrar automaticamente no Railway
-        const fs = require('fs');
-        const commonPaths = [
-          '/usr/bin/chromium',
-          '/usr/bin/chromium-browser',
-          '/usr/bin/google-chrome',
-          '/usr/bin/google-chrome-stable'
-        ];
-        
-        console.log(`🔍 [WhatsApp] Tentando encontrar Chromium automaticamente...`);
-        for (const path of commonPaths) {
-          if (fs.existsSync(path)) {
-            puppeteerConfig.executablePath = path;
-            console.log(`✅ [WhatsApp] Chromium encontrado automaticamente em: ${path}`);
-            break;
-          }
-        }
-        
-        if (!puppeteerConfig.executablePath) {
-          console.error('❌ [WhatsApp] Chromium não encontrado. Configure PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium no Railway.');
-        }
+      }
+      
+      if (foundChromium) {
+        puppeteerConfig.executablePath = foundChromium;
       }
       
       console.log(`🔧 [WhatsApp] Configuração final do Puppeteer:`, {
