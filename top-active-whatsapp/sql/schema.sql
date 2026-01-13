@@ -1,5 +1,5 @@
 -- ============================================
--- TOP ACTIVE WHATSAPP 2.0 - DATABASE SCHEMA
+-- JT DEV NOCODE 2.0 - DATABASE SCHEMA
 -- ============================================
 
 -- Tabela de usuários

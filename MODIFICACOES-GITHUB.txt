@@ -1,0 +1,57 @@
+MODIFICAÇÕES PARA FAZER NO GITHUB:
+
+===========================================
+MUDANÇA 1: Linha ~234 (método initialize)
+===========================================
+
+ENCONTRE:
+async initialize() {
+  // Evitar múltiplas inicializações simultâneas
+  if (this.isInitializing || this.isReady) {
+    return;
+  }
+
+SUBSTITUA POR:
+async initialize() {
+  // NÃO inicializar automaticamente sem userId (evitar inicialização no servidor)
+  if (!this.userId) {
+    console.warn('⚠️ [WhatsAppService] Tentativa de inicializar sem userId. Ignorando...');
+    console.warn('💡 WhatsApp deve ser inicializado apenas via /api/whatsapp/connect com userId válido');
+    return;
+  }
+
+  // Evitar múltiplas inicializações simultâneas
+  if (this.isInitializing || this.isReady) {
+    return;
+  }
+
+===========================================
+MUDANÇA 2: Linha ~51 (método generateQRCode)
+===========================================
+
+ENCONTRE:
+async generateQRCode() {
+  if (this.qrCode) {
+    return this.qrCode;
+  }
+  // Se o client não existe, criar um novo
+  if (!this.client) {
+    await this.initialize();
+  }
+  return this.qrCode || 'QR Code não disponível no momento';
+}
+
+SUBSTITUA POR:
+async generateQRCode() {
+  if (this.qrCode) {
+    return this.qrCode;
+  }
+  // Se o client não existe, criar um novo (apenas se tiver userId)
+  if (!this.client && this.userId) {
+    await this.initialize();
+  }
+  if (!this.userId) {
+    return 'QR Code não disponível: userId necessário';
+  }
+  return this.qrCode || 'QR Code não disponível no momento';
+}

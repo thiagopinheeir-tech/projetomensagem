@@ -1,7 +1,7 @@
 {
-  "name": "top-active-whatsapp",
+  "name": "jt-dev-nocode",
   "version": "2.0.0",
-  "description": "WhatsApp Automation Platform - Backend API",
+  "description": "JT DEV NOCODE - WhatsApp Automation Platform",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -20,7 +20,7 @@
     "chatbot",
     "crm"
   ],
-  "author": "Top Active",
+  "author": "JT DEV NOCODE",
   "license": "MIT",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

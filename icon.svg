@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo azul WhatsApp -->
+  <rect width="256" height="256" fill="#25D366" rx="32"/>
+  
+  <!-- Balão de fala branco -->
+  <path d="M 128 45 Q 88 45 58 75 Q 45 88 45 105 L 45 155 Q 45 175 58 188 Q 88 218 128 218 Q 160 218 185 205 L 210 220 L 200 200 Q 215 185 228 160 Q 241 135 241 105 Q 241 88 228 75 Q 198 45 128 45 Z" fill="white"/>
+  
+  <!-- Checkmark duplo -->
+  <g transform="translate(100, 90)">
+    <!-- Primeiro checkmark -->
+    <path d="M 20 35 L 35 50 L 60 20" stroke="#25D366" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Segundo checkmark -->
+    <path d="M 35 35 L 50 50 L 75 20" stroke="#25D366" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

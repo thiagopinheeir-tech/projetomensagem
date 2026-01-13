@@ -301,7 +301,7 @@ class WhatsAppService {
 
       this.client = new Client({
         authStrategy: new LocalAuth({
-          clientId: this.userId ? `user_${this.userId}` : "top-active-whatsapp",
+          clientId: this.userId ? `user_${this.userId}` : "jt-dev-nocode",
           dataPath: this.authPath
         }),
         puppeteer: {

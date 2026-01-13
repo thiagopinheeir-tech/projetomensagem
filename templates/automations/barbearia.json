@@ -1,0 +1,61 @@
+{
+  "rules": [
+    {
+      "name": "Preços",
+      "keywords": ["preço", "valor", "quanto custa", "quanto é", "preços", "custa", "valor do corte"],
+      "response": "Corte: R$ 25 | Barba: R$ 15 | Corte + Barba: R$ 35. Quer agendar para qual dia e horário?",
+      "priority": 10,
+      "case_sensitive": false
+    },
+    {
+      "name": "Horário de Funcionamento",
+      "keywords": ["horário", "horario", "funcionamento", "abre", "fecha", "atendimento", "que horas"],
+      "response": "Funcionamos de Segunda a Sábado, das 8h às 18h. Quer agendar um horário?",
+      "priority": 9,
+      "case_sensitive": false
+    },
+    {
+      "name": "Endereço",
+      "keywords": ["endereço", "endereco", "onde fica", "localização", "localizacao", "rua", "endereco da barbearia"],
+      "response": "Estamos localizados na Rua [ENDEREÇO]. Quer agendar para qual dia e horário?",
+      "priority": 8,
+      "case_sensitive": false
+    },
+    {
+      "name": "Formas de Pagamento",
+      "keywords": ["pagamento", "forma de pagamento", "aceita", "dinheiro", "cartão", "cartao", "pix"],
+      "response": "Aceitamos dinheiro, PIX e cartão (débito/crédito). Quer agendar um horário?",
+      "priority": 7,
+      "case_sensitive": false
+    }
+  ],
+  "menus": [
+    {
+      "name": "Menu Principal",
+      "trigger_keywords": ["menu", "opções", "opcoes", "ajuda", "help", "opcao"],
+      "menu_text": "📋 *Menu Principal*\n\nEscolha uma opção:\n",
+      "options": [
+        {
+          "number": 1,
+          "text": "Agendar horário",
+          "response": "Vamos agendar seu horário! Qual seu nome completo?"
+        },
+        {
+          "number": 2,
+          "text": "Ver preços",
+          "response": "Corte: R$ 25 | Barba: R$ 15 | Corte + Barba: R$ 35. Quer agendar?"
+        },
+        {
+          "number": 3,
+          "text": "Horário de funcionamento",
+          "response": "Funcionamos de Segunda a Sábado, das 8h às 18h. Quer agendar?"
+        },
+        {
+          "number": 4,
+          "text": "Ver endereço",
+          "response": "Estamos localizados na Rua [ENDEREÇO]. Quer agendar para qual dia e horário?"
+        }
+      ]
+    }
+  ]
+}

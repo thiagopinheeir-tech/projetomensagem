@@ -1,0 +1,27 @@
+===========================================
+COPIE E COLE ESTE SQL NO SUPABASE
+===========================================
+
+1. Acesse: https://app.supabase.com/project/hhhifxikyhvruwvmaduq/sql/new
+
+2. Cole este SQL:
+
+ALTER TABLE public.configurations DISABLE ROW LEVEL SECURITY;
+
+3. Clique em RUN (ou pressione Ctrl+Enter)
+
+4. Deve aparecer "Success. No rows returned"
+
+5. Pronto! Teste salvar configurações novamente.
+
+===========================================
+VERIFICAR SE FUNCIONOU (OPCIONAL):
+===========================================
+
+Execute este SQL para verificar:
+
+SELECT tablename, rowsecurity 
+FROM pg_tables 
+WHERE schemaname = 'public' AND tablename = 'configurations';
+
+Se "rowsecurity" for "false", então funcionou!

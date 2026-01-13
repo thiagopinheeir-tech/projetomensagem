@@ -1,0 +1,68 @@
+{
+  "rules": [
+    {
+      "name": "Valores e Taxas",
+      "keywords": ["valor", "quanto", "taxa", "juros", "empréstimo", "emprestimo", "empresta", "crédito", "credito"],
+      "response": "Oferecemos empréstimo pessoal de R$ 500 a R$ 50.000 com taxa a partir de 2,5% ao mês. Quer simular seu empréstimo?",
+      "priority": 10,
+      "case_sensitive": false
+    },
+    {
+      "name": "Prazos",
+      "keywords": ["prazo", "parcelas", "vezes", "meses", "quanto tempo", "tempo de pagamento"],
+      "response": "Prazos de 6 a 48 meses. Quer simular seu empréstimo?",
+      "priority": 9,
+      "case_sensitive": false
+    },
+    {
+      "name": "Documentação",
+      "keywords": ["documento", "documentos", "documentação", "documentacao", "preciso de", "o que preciso"],
+      "response": "Precisa de: RG/CNH, CPF, comprovante de renda e comprovante de residência. Quer simular seu empréstimo?",
+      "priority": 8,
+      "case_sensitive": false
+    },
+    {
+      "name": "Horário de Atendimento",
+      "keywords": ["horário", "horario", "funcionamento", "abre", "fecha", "atendimento", "que horas"],
+      "response": "Atendimento de Segunda a Sábado, das 8h às 18h. Quer simular seu empréstimo?",
+      "priority": 7,
+      "case_sensitive": false
+    },
+    {
+      "name": "Aprovação",
+      "keywords": ["aprova", "aprovado", "aprovacao", "aprovado rapid", "rapido", "rapidez"],
+      "response": "Análise de crédito rápida, aprovação em até 24 horas. Quer simular seu empréstimo?",
+      "priority": 6,
+      "case_sensitive": false
+    }
+  ],
+  "menus": [
+    {
+      "name": "Menu Principal",
+      "trigger_keywords": ["menu", "opções", "opcoes", "ajuda", "help", "opcao"],
+      "menu_text": "💰 *Menu Principal*\n\nEscolha uma opção:\n",
+      "options": [
+        {
+          "number": 1,
+          "text": "Simular empréstimo",
+          "response": "Vamos simular seu empréstimo! Qual seu nome completo e CPF?"
+        },
+        {
+          "number": 2,
+          "text": "Ver valores e taxas",
+          "response": "Oferecemos empréstimo pessoal de R$ 500 a R$ 50.000 com taxa a partir de 2,5% ao mês. Quer simular?"
+        },
+        {
+          "number": 3,
+          "text": "Documentos necessários",
+          "response": "Precisa de: RG/CNH, CPF, comprovante de renda e comprovante de residência. Quer simular?"
+        },
+        {
+          "number": 4,
+          "text": "Horário de atendimento",
+          "response": "Atendimento de Segunda a Sábado, das 8h às 18h. Quer simular seu empréstimo?"
+        }
+      ]
+    }
+  ]
+}

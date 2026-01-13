@@ -164,7 +164,7 @@ const ChatbotSettings = () => {
               label="Nome da Empresa"
               value={config.businessName}
               onChange={(e) => handleChange('businessName', e.target.value)}
-              placeholder="Top Active WhatsApp"
+              placeholder="JT DEV NOCODE"
               required
             />
 
