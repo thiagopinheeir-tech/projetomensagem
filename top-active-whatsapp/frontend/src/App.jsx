@@ -5,14 +5,11 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Messages from './pages/Messages';
 import Conversations from './pages/Conversations';
 import Profile from './pages/Profile';
 import ChatbotSettings from './pages/ChatbotSettings';
 import APIManager from './pages/APIManager';
 import CRM from './pages/CRM';
-import Automatizations from './pages/Automatizations';
-import Settings from './pages/Settings';
 import WhatsAppConnection from './pages/WhatsAppConnection';
 import { useAuth } from './hooks/useAuth';
 
@@ -99,26 +96,6 @@ function App() {
           />
 
           <Route
-            path="/messages"
-            element={
-              <ProtectedRoute>
-                <div className="flex h-screen overflow-hidden">
-                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <Navbar
-                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      isSidebarOpen={isSidebarOpen}
-                    />
-                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
-                      <Messages />
-                    </main>
-                  </div>
-                </div>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
             path="/conversations"
             element={
               <ProtectedRoute>
@@ -151,26 +128,6 @@ function App() {
                     />
                     <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
                       <ChatbotSettings />
-                    </main>
-                  </div>
-                </div>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/automatizations"
-            element={
-              <ProtectedRoute>
-                <div className="flex h-screen overflow-hidden">
-                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <Navbar
-                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      isSidebarOpen={isSidebarOpen}
-                    />
-                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
-                      <Automatizations />
                     </main>
                   </div>
                 </div>
@@ -231,26 +188,6 @@ function App() {
                     />
                     <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
                       <CRM />
-                    </main>
-                  </div>
-                </div>
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <div className="flex h-screen overflow-hidden">
-                  <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <Navbar
-                      onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      isSidebarOpen={isSidebarOpen}
-                    />
-                    <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
-                      <Settings />
                     </main>
                   </div>
                 </div>
