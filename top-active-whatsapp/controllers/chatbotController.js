@@ -701,18 +701,37 @@ const getTemplatePrompt = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Template inválido' });
     }
     
-    // Caminho do arquivo de prompt
-    const promptPath = path.join(__dirname, '..', 'prompts', `${key}.txt`);
+    // Tentar múltiplos caminhos possíveis (para funcionar em diferentes ambientes)
+    const possiblePaths = [
+      path.join(__dirname, '..', 'prompts', `${key}.txt`), // Relativo ao controllers/
+      path.join(process.cwd(), 'prompts', `${key}.txt`), // Relativo ao diretório de trabalho
+      path.join(process.cwd(), 'top-active-whatsapp', 'prompts', `${key}.txt`), // Se estiver em subdiretório
+      path.join('/app', 'prompts', `${key}.txt`), // Caminho absoluto no Docker/Railway
+    ];
     
-    // Ler arquivo
-    if (!fs.existsSync(promptPath)) {
-      return res.status(404).json({ success: false, message: 'Prompt não encontrado' });
+    let promptPath = null;
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        promptPath = testPath;
+        console.log(`✅ Prompt encontrado em: ${testPath}`);
+        break;
+      }
+    }
+    
+    // Se não encontrou em nenhum caminho, retornar erro
+    if (!promptPath) {
+      console.error(`❌ Prompt não encontrado para template "${key}". Caminhos testados:`, possiblePaths);
+      return res.status(404).json({ 
+        success: false, 
+        message: `Prompt não encontrado para template "${key}"` 
+      });
     }
     
     const prompt = fs.readFileSync(promptPath, 'utf8').trim();
     
     res.json({ success: true, prompt });
   } catch (e) {
+    console.error('❌ Erro ao carregar prompt do template:', e);
     next(e);
   }
 };
@@ -970,13 +989,22 @@ function loadTemplatePromptFile(templateKey) {
       return null;
     }
     
-    const promptPath = path.join(__dirname, '..', 'prompts', `${templateKey}.txt`);
+    // Tentar múltiplos caminhos possíveis (para funcionar em diferentes ambientes)
+    const possiblePaths = [
+      path.join(__dirname, '..', 'prompts', `${templateKey}.txt`), // Relativo ao controllers/
+      path.join(process.cwd(), 'prompts', `${templateKey}.txt`), // Relativo ao diretório de trabalho
+      path.join(process.cwd(), 'top-active-whatsapp', 'prompts', `${templateKey}.txt`), // Se estiver em subdiretório
+      path.join('/app', 'prompts', `${templateKey}.txt`), // Caminho absoluto no Docker/Railway
+    ];
     
-    if (!fs.existsSync(promptPath)) {
-      return null;
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        return fs.readFileSync(testPath, 'utf8').trim();
+      }
     }
     
-    return fs.readFileSync(promptPath, 'utf8').trim();
+    console.warn(`⚠️ Prompt não encontrado para template ${templateKey} em nenhum caminho testado`);
+    return null;
   } catch (e) {
     console.warn(`⚠️ Erro ao carregar prompt do template ${templateKey}:`, e.message);
     return null;

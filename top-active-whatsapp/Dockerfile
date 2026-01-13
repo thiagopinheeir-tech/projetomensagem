@@ -43,7 +43,7 @@ RUN npm install --production
 COPY . .
 
 # Criar diretórios necessários
-RUN mkdir -p logs uploads temp
+RUN mkdir -p logs uploads temp prompts
 
 # Expor porta
 EXPOSE 5000
