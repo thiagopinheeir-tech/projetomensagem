@@ -307,24 +307,42 @@ class WhatsAppService {
       
       // No Railway/Linux, usar o Chromium instalado pelo nixpacks
       if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
-        // Tentar encontrar o Chromium em locais comuns do Nix
-        const possiblePaths = [
-          '/nix/store/*/bin/chromium',
-          '/usr/bin/chromium',
-          '/usr/bin/chromium-browser',
-          '/usr/bin/google-chrome',
-          '/usr/bin/google-chrome-stable'
-        ];
+        const fs = require('fs');
+        const { execSync } = require('child_process');
         
-        // Usar variável de ambiente se disponível, senão tentar detectar
-        const chromiumPath = process.env.CHROMIUM_PATH || 
-          (process.platform === 'linux' ? '/usr/bin/chromium' : undefined);
+        // Tentar encontrar o Chromium
+        let chromiumPath = process.env.CHROMIUM_PATH;
         
-        if (chromiumPath) {
+        if (!chromiumPath) {
+          // Tentar encontrar usando 'which' ou 'whereis'
+          try {
+            chromiumPath = execSync('which chromium || which chromium-browser || which google-chrome', { encoding: 'utf8' }).trim();
+          } catch (e) {
+            // Se 'which' falhar, tentar caminhos comuns
+            const commonPaths = [
+              '/usr/bin/chromium',
+              '/usr/bin/chromium-browser',
+              '/usr/bin/google-chrome',
+              '/usr/bin/google-chrome-stable',
+              '/nix/store/*/bin/chromium'
+            ];
+            
+            for (const path of commonPaths) {
+              if (fs.existsSync(path)) {
+                chromiumPath = path;
+                break;
+              }
+            }
+          }
+        }
+        
+        if (chromiumPath && fs.existsSync(chromiumPath)) {
           puppeteerConfig.executablePath = chromiumPath;
           console.log(`🔧 [WhatsApp] Usando Chromium em: ${chromiumPath}`);
         } else {
-          console.log('⚠️ [WhatsApp] Chromium path não configurado, Puppeteer tentará encontrar automaticamente');
+          console.log('⚠️ [WhatsApp] Chromium não encontrado, Puppeteer tentará usar o Chrome baixado automaticamente');
+          // Adicionar flag para Puppeteer baixar Chrome se não encontrar
+          puppeteerConfig.args.push('--disable-blink-features=AutomationControlled');
         }
       }
 
