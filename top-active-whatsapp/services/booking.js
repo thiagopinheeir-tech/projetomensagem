@@ -585,9 +585,7 @@ class BookingService {
     }
 
     // sugerir 3 opções do dia
-    const calendarService = await getSchedulerService(userId);
-    const schedulerType = calendarService === premiumShearsScheduler ? 'premium_shears' : 'google_calendar';
-    
+    // calendarService já foi declarado acima na linha 508
     const { start, end } = getOpenClose(state.dateOnly);
     let slots = [];
     try {
