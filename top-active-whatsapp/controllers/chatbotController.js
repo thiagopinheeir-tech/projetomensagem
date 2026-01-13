@@ -5,9 +5,6 @@ const { query } = require('../config/database');
 const encryption = require('../services/encryption');
 
 function mapProfileRowToConfig(row) {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatbotController.js:7',message:'mapProfileRowToConfig ENTRY',data:{template_key:row?.template_key,business_name:row?.business_name,has_special_instructions:!!row?.special_instructions},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   if (!row) return null;
   const config = {
     businessName: row.business_name ?? '',
@@ -40,16 +37,10 @@ function mapProfileRowToConfig(row) {
       ? row.business_hours
       : {}
   };
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatbotController.js:33',message:'mapProfileRowToConfig EXIT',data:{businessName:config.businessName,specialInstructionsLength:config.specialInstructions?.length,servicesCount:config.services?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   return config;
 }
 
 async function getActiveProfile(userId) {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatbotController.js:36',message:'getActiveProfile ENTRY',data:{userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   const result = await query(
     `SELECT *
      FROM chatbot_profiles
@@ -59,16 +50,10 @@ async function getActiveProfile(userId) {
     [userId]
   );
   const profile = result.rows[0] || null;
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatbotController.js:45',message:'getActiveProfile EXIT',data:{found:!!profile,template_key:profile?.template_key,business_name:profile?.business_name,special_instructions_length:profile?.special_instructions?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   return profile;
 }
 
 async function applyConfigToRuntime(config, enabled, userId) {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatbotController.js:48',message:'applyConfigToRuntime ENTRY',data:{hasConfig:!!config,enabled,businessName:config?.businessName,specialInstructionsLength:config?.specialInstructions?.length,userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
   if (config && userId) {
     // Obter instância WhatsApp do usuário
     const instance = whatsappManager.getInstance(userId);
