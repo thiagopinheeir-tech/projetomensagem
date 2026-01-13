@@ -6,6 +6,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Interceptor para adicionar token
@@ -26,6 +27,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log de erro para debug
+    if (!error.response) {
+      console.error('❌ Erro de conexão:', {
+        message: error.message,
+        code: error.code,
+        baseURL: api.defaults.baseURL,
+        url: error.config?.url
+      });
+    }
+    
     // Não mostra toast aqui - deixa os componentes tratarem os erros
     // Apenas trata 401 para logout automático
     if (error.response?.status === 401 && window.location.pathname !== '/login') {

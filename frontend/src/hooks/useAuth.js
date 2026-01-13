@@ -59,8 +59,12 @@ export const useAuth = () => {
       console.error('Erro ao registrar:', error);
       
       // Tratamento de erros específicos
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
-        return { success: false, error: 'Não foi possível conectar ao servidor. Verifique se o backend está rodando.' };
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || !error.response) {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        return { 
+          success: false, 
+          error: `Não foi possível conectar ao servidor. Verifique se o backend está rodando em ${apiUrl}` 
+        };
       }
       
       if (error.response?.data?.message) {

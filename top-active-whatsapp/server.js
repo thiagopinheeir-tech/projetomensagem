@@ -55,14 +55,22 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middlewares
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// CORS: Permitir todas as origens em produção (ou configurar via variável de ambiente)
 const corsOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000', 'http://localhost:5173'];
+  : process.env.NODE_ENV === 'production'
+    ? ['*'] // Em produção, permitir todas as origens (ou configurar específicas)
+    : ['http://localhost:3000', 'http://localhost:5173'];
 
 app.use(cors({
-  origin: corsOrigins,
-  credentials: true
+  origin: corsOrigins.includes('*') ? true : corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(logger);
