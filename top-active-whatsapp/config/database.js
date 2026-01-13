@@ -4,11 +4,18 @@ const { Pool } = require('pg');
 // Configurar pool - corrigir URL se contiver IPv6
 let connectionString = process.env.DATABASE_URL;
 
+console.log('🔍 Verificando DATABASE_URL...');
+console.log('   DATABASE_URL existe:', !!connectionString);
+console.log('   SUPABASE_URL existe:', !!process.env.SUPABASE_URL);
+if (connectionString) {
+  console.log('   DATABASE_URL (primeiros 80 chars):', connectionString.substring(0, 80) + '...');
+}
+
 // Corrigir URL se contiver endereço IPv6: substituir por hostname do Supabase
 if (connectionString && connectionString.includes('supabase')) {
-  // Detectar IPv6 (formato: @2600:1f1e:...:5432 ou @[2600:1f1e:...]:5432)
-  // IPv6 tem múltiplos dois pontos e não contém pontos
-  const ipv6Pattern = /@(\[?[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){7}\]?):5432/;
+  // Detectar IPv6 - padrão mais simples: qualquer sequência de hexadecimais e dois pontos após @
+  // IPv6 tem formato: 2600:1f1e:75b:4b16:cce:f47b:a990:71b0
+  const ipv6Pattern = /@(\[?[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){3,}\]?):5432/;
   const ipv6Match = connectionString.match(ipv6Pattern);
   
   if (ipv6Match) {
@@ -47,14 +54,22 @@ if (connectionString && connectionString.includes('supabase')) {
     if (projectId) {
       // Substituir IP IPv6 pelo hostname do Supabase
       const oldUrl = connectionString;
+      // Regex mais robusta: captura qualquer IPv6 (com ou sem colchetes)
       connectionString = connectionString.replace(/@\[?[0-9a-fA-F:]{15,}\]?:5432/, `@db.${projectId}.supabase.co:5432`);
       console.log('✅ Substituído IP IPv6 por hostname do Supabase');
-      console.log('   Antes:', oldUrl.substring(0, 50) + '...');
-      console.log('   Depois:', connectionString.substring(0, 50) + '...');
+      console.log('   Antes:', oldUrl.substring(0, 60) + '...');
+      console.log('   Depois:', connectionString.substring(0, 60) + '...');
     } else {
       console.error('❌ Não foi possível extrair project ID do Supabase!');
       console.error('   SUPABASE_URL:', process.env.SUPABASE_URL || 'NÃO CONFIGURADO');
       console.error('   DATABASE_URL (primeiros 100 chars):', connectionString.substring(0, 100));
+      console.error('   ⚠️ ATENÇÃO: A DATABASE_URL precisa ser atualizada manualmente no Railway!');
+      console.error('   📋 Siga as instruções em: ATUALIZAR-DATABASE-URL-RAILWAY.md');
+    }
+  } else {
+    // Verificar se não tem IPv6 mas também não tem hostname correto
+    if (!connectionString.includes('db.') && !connectionString.includes('pooler.supabase.com')) {
+      console.warn('⚠️ DATABASE_URL pode estar incorreta - não contém hostname do Supabase');
     }
   }
 }
