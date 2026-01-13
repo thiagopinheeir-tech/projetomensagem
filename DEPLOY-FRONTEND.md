@@ -47,10 +47,12 @@
 
 #### ⚙️ Configurações necessárias:
 
-**1. Root Directory:**
-- Clique em **"Edit"**, **"Change"** ou **"Browse"** ao lado de "Root Directory"
-- Digite: `top-active-whatsapp/frontend`
-- **OU** clique em **"Browse"** e selecione a pasta `top-active-whatsapp/frontend`
+**1. Root Directory: ⚠️ IMPORTANTE!**
+- Clique no botão **"Edit"** ao lado de "Root Directory"
+- **MUDE de:** `frontend` 
+- **PARA:** `top-active-whatsapp/frontend`
+- ⚠️ **NÃO é apenas `frontend`!** Precisa ser `top-active-whatsapp/frontend`
+- Clique em "Save" ou confirme
 
 **2. Framework Preset:**
 - Se aparecer, selecione **"Vite"** ou deixe **"Other"**
