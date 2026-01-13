@@ -37,7 +37,7 @@ RUN which chromium || which chromium-browser || echo "⚠️ Chromium não encon
 COPY package*.json ./
 
 # Instalar dependências Node
-RUN npm ci --production
+RUN npm install --production
 
 # Copiar código da aplicação
 COPY . .
