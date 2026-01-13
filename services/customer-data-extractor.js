@@ -8,42 +8,122 @@ class CustomerDataExtractor {
   /**
    * Extrai o nome do cliente da mensagem usando padrões simples
    */
-  extractCustomerName(userMessage, conversationHistory = []) {
-    if (!userMessage) return null;
+  async extractCustomerName(userMessage, conversationHistory = [], phone = null, userId = null) {
+    if (!userMessage) {
+      // Se não tem mensagem mas tem telefone, tentar buscar nome salvo no banco
+      if (phone && userId) {
+        try {
+          const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+          const { query } = require('../config/database');
+          const result = await query(
+            'SELECT name FROM contacts WHERE user_id = $1 AND phone = $2 AND name IS NOT NULL AND name NOT LIKE $3 LIMIT 1',
+            [userId, cleanPhone, 'Contato%']
+          );
+          if (result.rows.length > 0 && result.rows[0].name) {
+            console.log(`📝 Nome encontrado no banco de dados: ${result.rows[0].name}`);
+            return result.rows[0].name;
+          }
+        } catch (error) {
+          console.warn(`⚠️ Erro ao buscar nome no banco: ${error.message}`);
+        }
+      }
+      return null;
+    }
 
-    const message = userMessage.toLowerCase().trim();
+    const message = userMessage.trim();
+    const messageLower = message.toLowerCase();
     
-    // Padrões comuns para identificar nome
+    // Padrões comuns para identificar nome (melhorados)
     const patterns = [
-      /(?:meu nome é|me chamo|sou o|sou a|eu sou|eu sou o|eu sou a)\s+([a-záàâãéèêíïóôõöúç\s]{2,30})/i,
-      /(?:nome|chamo)\s*[:\-]?\s*([a-záàâãéèêíïóôõöúç\s]{2,30})/i,
-      /^([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})$/  // Nome próprio como mensagem única
+      // "meu nome é João Silva"
+      /(?:meu\s+nome\s+é|me\s+chamo|sou\s+o|sou\s+a|eu\s+sou|eu\s+sou\s+o|eu\s+sou\s+a)\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})/i,
+      // "nome: João Silva" ou "nome - João Silva"
+      /(?:nome|chamo)\s*[:\-]\s*([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})/i,
+      // "sou João Silva"
+      /^sou\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})$/i,
+      // Nome próprio como mensagem única (2-5 palavras, primeira letra maiúscula)
+      /^([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç]+(?:\s+[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç]+){1,4})$/,
+      // "pode me chamar de João"
+      /(?:pode\s+me\s+chamar\s+de|chame\s+de|me\s+chame\s+de)\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})/i
     ];
 
     for (const pattern of patterns) {
       const match = message.match(pattern);
       if (match && match[1]) {
-        const name = match[1].trim();
+        let name = match[1].trim();
+        
         // Validar que não é muito curto e não contém palavras comuns
         if (name.length >= 2 && name.length <= 50) {
-          const commonWords = ['o', 'a', 'de', 'da', 'do', 'e', 'em', 'que', 'para', 'com'];
-          if (!commonWords.includes(name.toLowerCase())) {
-            // Capitalizar primeira letra de cada palavra
-            return name.split(' ').map(word => 
-              word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-            ).join(' ');
+          const commonWords = ['o', 'a', 'de', 'da', 'do', 'e', 'em', 'que', 'para', 'com', 'comigo', 'você', 'voce'];
+          const nameWords = name.toLowerCase().split(/\s+/);
+          
+          // Se todas as palavras são comuns, não é um nome
+          if (nameWords.every(word => commonWords.includes(word))) {
+            continue;
+          }
+          
+          // Capitalizar primeira letra de cada palavra
+          name = name.split(' ').map(word => {
+            const trimmed = word.trim();
+            if (!trimmed) return '';
+            return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+          }).filter(Boolean).join(' ');
+          
+          // Validar que não contém números ou caracteres especiais (exceto hífen e apóstrofo)
+          if (/^[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇa-záàâãéèêíïóôõöúç\s\-\']+$/.test(name)) {
+            console.log(`📝 Nome extraído da mensagem: ${name}`);
+            return name;
           }
         }
       }
     }
 
-    // Tentar buscar no histórico de conversas
+    // Tentar buscar no histórico de conversas (sem recursão para evitar loops)
     if (conversationHistory && conversationHistory.length > 0) {
       for (const msg of conversationHistory) {
-        if (msg.user_message) {
-          const name = this.extractCustomerName(msg.user_message);
-          if (name) return name;
+        if (msg.user_message && msg.user_message !== userMessage) {
+          // Aplicar os mesmos padrões de regex diretamente
+          const msgText = msg.user_message.trim();
+          for (const pattern of patterns) {
+            const match = msgText.match(pattern);
+            if (match && match[1]) {
+              let name = match[1].trim();
+              if (name.length >= 2 && name.length <= 50) {
+                const commonWords = ['o', 'a', 'de', 'da', 'do', 'e', 'em', 'que', 'para', 'com', 'comigo', 'você', 'voce'];
+                const nameWords = name.toLowerCase().split(/\s+/);
+                if (!nameWords.every(word => commonWords.includes(word))) {
+                  name = name.split(' ').map(word => {
+                    const trimmed = word.trim();
+                    if (!trimmed) return '';
+                    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+                  }).filter(Boolean).join(' ');
+                  if (/^[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇa-záàâãéèêíïóôõöúç\s\-\']+$/.test(name)) {
+                    console.log(`📝 Nome extraído do histórico: ${name}`);
+                    return name;
+                  }
+                }
+              }
+            }
+          }
         }
+      }
+    }
+
+    // Se não encontrou na mensagem, tentar buscar nome salvo no banco
+    if (phone && userId) {
+      try {
+        const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+        const { query } = require('../config/database');
+        const result = await query(
+          'SELECT name FROM contacts WHERE user_id = $1 AND phone = $2 AND name IS NOT NULL AND name NOT LIKE $3 LIMIT 1',
+          [userId, cleanPhone, 'Contato%']
+        );
+        if (result.rows.length > 0 && result.rows[0].name) {
+          console.log(`📝 Nome encontrado no banco de dados: ${result.rows[0].name}`);
+          return result.rows[0].name;
+        }
+      } catch (error) {
+        console.warn(`⚠️ Erro ao buscar nome no banco: ${error.message}`);
       }
     }
 
@@ -298,8 +378,8 @@ class CustomerDataExtractor {
         userMessage: userMessage.substring(0, 50)
       });
 
-      // Extrair nome
-      const customerName = this.extractCustomerName(userMessage, conversationHistory);
+      // Extrair nome (agora é async e busca no banco também)
+      const customerName = await this.extractCustomerName(userMessage, conversationHistory, phone, userId);
       console.log(`📝 Nome extraído: ${customerName || 'Nenhum'}`);
 
       // Extrair serviços (passar servicesConfig também)

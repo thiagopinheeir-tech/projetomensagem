@@ -1186,19 +1186,76 @@ class WhatsAppService {
       let dateOnly = null;
       let time = null;
       
+      // PRIMEIRO: Tentar buscar nome do contato no banco de dados (se tiver phone e userId)
+      if (chatbotConfig?.userId) {
+        try {
+          const { query } = require('../config/database');
+          // Tentar obter phone do histórico ou do contexto
+          const phoneFromHistory = history.find(h => h.phone)?.phone;
+          if (phoneFromHistory) {
+            const cleanPhone = phoneFromHistory.replace('@c.us', '').replace(/\D/g, '');
+            const { convertUserIdForTable } = require('../utils/userId-converter');
+            const convertedUserId = await convertUserIdForTable('contacts', chatbotConfig.userId);
+            const contactResult = await query(
+              `SELECT name FROM contacts 
+               WHERE user_id = $1 AND phone = $2 
+               AND name IS NOT NULL 
+               AND name NOT LIKE $3 
+               AND LENGTH(name) >= 2
+               LIMIT 1`,
+              [convertedUserId, cleanPhone, 'Contato%']
+            );
+            if (contactResult.rows.length > 0 && contactResult.rows[0].name) {
+              name = contactResult.rows[0].name.trim();
+              console.log(`📅 [extractBookingInfoFromHistory] Nome encontrado no banco de dados: ${name}`);
+            }
+          }
+        } catch (dbError) {
+          console.warn(`⚠️ [extractBookingInfoFromHistory] Erro ao buscar nome no banco: ${dbError.message}`);
+        }
+      }
+      
       // Buscar nas últimas mensagens (mais recentes primeiro)
       const recentMessages = [...history].reverse().slice(0, 10);
       console.log(`📅 [extractBookingInfoFromHistory] Analisando ${recentMessages.length} mensagens recentes`);
+      
+      // Padrões melhorados para extrair nome
+      const namePatterns = [
+        /(?:meu\s+nome\s+é|me\s+chamo|sou\s+o|sou\s+a|eu\s+sou|eu\s+sou\s+o|eu\s+sou\s+a)\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})/i,
+        /(?:nome|chamo)\s*[:\-]\s*([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})/i,
+        /^sou\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç\s]{1,30})$/i,
+        /^([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç]+(?:\s+[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-záàâãéèêíïóôõöúç]+){1,4})$/
+      ];
       
       for (const msg of recentMessages) {
         const userMsg = norm(msg.user_message || '');
         const aiMsg = norm(msg.ai_response || '');
         const combined = `${userMsg} ${aiMsg}`;
         
-        // Extrair nome
-        if (!name && looksLikeName(userMsg)) {
-          name = userMsg;
-          console.log(`📅 [extractBookingInfoFromHistory] Nome detectado: ${name}`);
+        // Extrair nome usando padrões melhorados
+        if (!name) {
+          // Primeiro tentar padrões regex
+          for (const pattern of namePatterns) {
+            const match = userMsg.match(pattern);
+            if (match && match[1]) {
+              const extractedName = match[1].trim();
+              if (looksLikeName(extractedName)) {
+                name = extractedName.split(' ').map(word => 
+                  word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ');
+                console.log(`📅 [extractBookingInfoFromHistory] Nome detectado via padrão: ${name}`);
+                break;
+              }
+            }
+          }
+          
+          // Se não encontrou com padrões, tentar looksLikeName direto
+          if (!name && looksLikeName(userMsg)) {
+            name = userMsg.split(' ').map(word => 
+              word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+            console.log(`📅 [extractBookingInfoFromHistory] Nome detectado diretamente: ${name}`);
+          }
         }
         
         // Extrair serviço
