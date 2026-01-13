@@ -11,7 +11,8 @@
     "db:down": "docker-compose down",
     "db:init": "node scripts/init-db.js",
     "test": "jest",
-    "seed": "node seeds/seed.js"
+    "seed": "node seeds/seed.js",
+    "postinstall": "node -e \"if (process.env.RAILWAY_ENVIRONMENT) { const {execSync} = require('child_process'); try { execSync('which chromium || which chromium-browser', {stdio: 'ignore'}); console.log('✅ Chromium encontrado no sistema'); } catch(e) { console.log('⚠️ Chromium não encontrado - Puppeteer tentará baixar Chrome'); } }\""
   },
   "keywords": [
     "whatsapp",

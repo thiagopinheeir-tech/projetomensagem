@@ -369,18 +369,24 @@ class WhatsAppService {
           }
         }
         
-        if (!foundChromium) {
-          console.error('❌ [WhatsApp] Chromium não encontrado em nenhum local!');
-          console.error('   Possíveis causas:');
-          console.error('   1. nixpacks.toml não está sendo usado pelo Railway');
-          console.error('   2. Chromium não foi instalado durante o build');
-          console.error('   3. Chromium está em um caminho diferente');
-          console.error('   💡 Solução: Verifique os logs de build do Railway para ver se o Chromium foi instalado');
-          
-          // Última tentativa: deixar o Puppeteer baixar o Chrome automaticamente
-          console.log('   ⚠️ Tentando usar Chrome baixado pelo Puppeteer (pode falhar no Railway)...');
-          delete puppeteerConfig.executablePath;
-        }
+          if (!foundChromium) {
+            console.error('❌ [WhatsApp] Chromium não encontrado em nenhum local!');
+            console.error('   Possíveis causas:');
+            console.error('   1. nixpacks.toml não está sendo usado pelo Railway');
+            console.error('   2. Chromium não foi instalado durante o build');
+            console.error('   3. Chromium está em um caminho diferente');
+            console.error('   💡 Solução: Verifique os logs de build do Railway para ver se o Chromium foi instalado');
+            
+            // No Railway, tentar usar o Chrome baixado pelo Puppeteer
+            // O Puppeteer baixa o Chrome automaticamente em node_modules/.cache/puppeteer
+            console.log('   ⚠️ Chromium do sistema não encontrado. Puppeteer tentará usar Chrome baixado automaticamente.');
+            console.log('   ⚠️ NOTA: Isso pode não funcionar no Railway devido a limitações de espaço/disco.');
+            console.log('   💡 Configure o nixpacks.toml ou use um Dockerfile customizado para instalar Chromium.');
+            
+            // Não definir executablePath - deixar Puppeteer tentar encontrar/baixar
+            // Mas adicionar flag para evitar erro de permissão
+            puppeteerConfig.args.push('--disable-blink-features=AutomationControlled');
+          }
       }
       
       if (foundChromium) {
