@@ -66,9 +66,6 @@ async function applyConfigToRuntime(config, enabled, userId) {
       }
     }
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatbotController.js:53',message:'applyConfigToRuntime EXIT',data:{applied:!!config},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
 }
 
 const getConfig = async (req, res, next) => {
