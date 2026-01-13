@@ -1,0 +1,18 @@
+[phases.setup]
+nixPkgs = ['nodejs_20', 'chromium', 'chromedriver']
+
+[phases.install]
+cmds = [
+  'npm ci'
+]
+
+[phases.build]
+cmds = [
+  'echo "Build complete"'
+]
+
+[start]
+cmd = 'node server.js'
+
+[staticAssets]
+'/' = 'dist'

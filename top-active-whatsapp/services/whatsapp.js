@@ -299,15 +299,41 @@ class WhatsAppService {
         fs.mkdirSync(this.authPath, { recursive: true });
       }
 
+      // Detectar se está em produção (Railway) e configurar executablePath do Chrome
+      let puppeteerConfig = {
+        headless: 'new',
+        args: puppeteerArgs
+      };
+      
+      // No Railway/Linux, usar o Chromium instalado pelo nixpacks
+      if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
+        // Tentar encontrar o Chromium em locais comuns do Nix
+        const possiblePaths = [
+          '/nix/store/*/bin/chromium',
+          '/usr/bin/chromium',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/google-chrome',
+          '/usr/bin/google-chrome-stable'
+        ];
+        
+        // Usar variável de ambiente se disponível, senão tentar detectar
+        const chromiumPath = process.env.CHROMIUM_PATH || 
+          (process.platform === 'linux' ? '/usr/bin/chromium' : undefined);
+        
+        if (chromiumPath) {
+          puppeteerConfig.executablePath = chromiumPath;
+          console.log(`🔧 [WhatsApp] Usando Chromium em: ${chromiumPath}`);
+        } else {
+          console.log('⚠️ [WhatsApp] Chromium path não configurado, Puppeteer tentará encontrar automaticamente');
+        }
+      }
+
       this.client = new Client({
         authStrategy: new LocalAuth({
           clientId: this.userId ? `user_${this.userId}` : "jt-dev-nocode",
           dataPath: this.authPath
         }),
-        puppeteer: {
-          headless: 'new',
-          args: puppeteerArgs
-        },
+        puppeteer: puppeteerConfig,
         // Timeout aumentado para inicialização
         authTimeoutMs: 60000,
         qrMaxRetries: 5
