@@ -241,7 +241,14 @@ class WhatsAppManager {
     console.log('🔄 [WhatsAppManager] Verificando sessões salvas para reconexão automática...');
     
     try {
-      const baseAuthDir = process.env.RAILWAY_ENVIRONMENT 
+      // Railway define várias variáveis de ambiente, verificar qualquer uma delas
+      const isRailway = process.env.RAILWAY_ENVIRONMENT || 
+                        process.env.RAILWAY_ENVIRONMENT_NAME || 
+                        process.env.RAILWAY_SERVICE_NAME ||
+                        process.env.RAILWAY_PROJECT_NAME ||
+                        (process.cwd() === '/app'); // Fallback: verificar se cwd é /app
+      
+      const baseAuthDir = isRailway
         ? '/app/.wwebjs_auth'
         : path.join(process.cwd(), '.wwebjs_auth');
       
