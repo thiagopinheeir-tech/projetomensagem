@@ -8,27 +8,27 @@ if (process.env.DATABASE_URL) {
   // Usar DATABASE_URL se disponível (formato: postgresql://user:password@host:port/database)
   let connectionString = process.env.DATABASE_URL;
   
-  // Forçar IPv4: substituir endereços IPv6 por hostname do Supabase
-  // Se a URL contém um endereço IPv6, extrair o hostname do Supabase
-  if (connectionString.includes('supabase') && connectionString.match(/\[?([0-9a-fA-F:]+)\]?:5432/)) {
-    // Extrair o hostname do Supabase (formato: db.xxxxx.supabase.co)
-    const hostnameMatch = connectionString.match(/@([^:]+):5432/);
-    if (hostnameMatch) {
-      // Se já tem hostname, usar ele
-      const hostname = hostnameMatch[1];
-      if (!hostname.match(/^[0-9a-fA-F:]+$/)) {
-        // Já é um hostname, não precisa mudar
+  // Corrigir URL se contiver endereço IPv6: substituir por hostname do Supabase
+  // O Supabase às vezes retorna IPs IPv6 que não funcionam no Railway
+  if (connectionString.includes('supabase')) {
+    // Detectar se há um IP IPv6 na URL (formato: [2600:1f1e:...] ou 2600:1f1e:...)
+    const ipv6Match = connectionString.match(/@(\[?[0-9a-fA-F:]+\]?):5432/);
+    if (ipv6Match && ipv6Match[1].includes(':')) {
+      // Extrair o project ID do Supabase da URL original ou de variáveis de ambiente
+      const projectId = process.env.SUPABASE_URL 
+        ? process.env.SUPABASE_URL.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1]
+        : connectionString.match(/db\.([^.]+)\.supabase\.co/)?.[1];
+      
+      if (projectId) {
+        // Substituir IP IPv6 pelo hostname do Supabase
+        connectionString = connectionString.replace(/@\[?[0-9a-fA-F:]+\]?:5432/, `@db.${projectId}.supabase.co:5432`);
+        console.log('⚠️ Substituído IP IPv6 por hostname do Supabase na DATABASE_URL');
       } else {
-        // É um IP, tentar extrair hostname da URL original
-        const supabaseMatch = connectionString.match(/@db\.([^.]+)\.supabase\.co/);
-        if (supabaseMatch) {
-          connectionString = connectionString.replace(/@[^:]+:5432/, `@db.${supabaseMatch[1]}.supabase.co:5432`);
-        }
+        console.warn('⚠️ Detectado IP IPv6 na DATABASE_URL, mas não foi possível extrair project ID do Supabase');
       }
     }
   }
   
-  // Forçar IPv4 no pool do PostgreSQL
   poolConfig = {
     connectionString: connectionString,
     ssl: connectionString.includes('supabase') || connectionString.includes('localhost') === false 
@@ -37,8 +37,6 @@ if (process.env.DATABASE_URL) {
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
-    // Forçar IPv4
-    family: 4,
   };
   console.log('✅ Usando DATABASE_URL para conexão');
 } else if (process.env.SUPABASE_DB_URL) {

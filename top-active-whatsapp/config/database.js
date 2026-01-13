@@ -1,17 +1,33 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-// Configurar pool com suporte para IPv4
-let poolConfig = {
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost') ? false : {
-    rejectUnauthorized: false
-  },
-  // Forçar IPv4 para evitar problemas com IPv6
-  family: 4,
-};
+// Configurar pool - corrigir URL se contiver IPv6
+let connectionString = process.env.DATABASE_URL;
 
-const pool = new Pool(poolConfig);
+// Corrigir URL se contiver endereço IPv6: substituir por hostname do Supabase
+if (connectionString && connectionString.includes('supabase')) {
+  // Detectar se há um IP IPv6 na URL
+  const ipv6Match = connectionString.match(/@(\[?[0-9a-fA-F:]+\]?):5432/);
+  if (ipv6Match && ipv6Match[1].includes(':')) {
+    // Extrair o project ID do Supabase
+    const projectId = process.env.SUPABASE_URL 
+      ? process.env.SUPABASE_URL.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1]
+      : connectionString.match(/db\.([^.]+)\.supabase\.co/)?.[1];
+    
+    if (projectId) {
+      // Substituir IP IPv6 pelo hostname do Supabase
+      connectionString = connectionString.replace(/@\[?[0-9a-fA-F:]+\]?:5432/, `@db.${projectId}.supabase.co:5432`);
+      console.log('⚠️ Substituído IP IPv6 por hostname do Supabase na DATABASE_URL');
+    }
+  }
+}
+
+const pool = new Pool({
+  connectionString: connectionString,
+  ssl: connectionString && connectionString.includes('localhost') ? false : {
+    rejectUnauthorized: false
+  }
+});
 
 pool.on('error', (err) => {
   console.error('❌ Unexpected error on idle client', err);
