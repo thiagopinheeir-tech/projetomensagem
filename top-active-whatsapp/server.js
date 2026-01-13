@@ -17,6 +17,7 @@ const crmRoutes = require('./routes/crm');
 const calendarRoutes = require('./routes/calendar');
 const googleRoutes = require('./routes/google');
 const automationRoutes = require('./routes/automations');
+const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -78,7 +79,8 @@ app.get('/', (req, res) => {
       calendar: '/api/calendar',
       google: '/api/google',
       automations: '/api/automations',
-      apiKeys: '/api/api-keys'
+      apiKeys: '/api/api-keys',
+      webhooks: '/api/webhooks'
     },
     timestamp: new Date().toISOString()
   });
@@ -118,6 +120,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/automations', automationRoutes);
 app.use('/api/api-keys', require('./routes/api-keys'));
+app.use('/api/webhooks', webhookRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
