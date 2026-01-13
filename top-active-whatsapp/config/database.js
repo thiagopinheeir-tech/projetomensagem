@@ -74,60 +74,20 @@ if (connectionString && connectionString.includes('supabase')) {
   }
 }
 
-// Log da URL final antes de criar o pool
-console.log('🔍 URL final para conexão (primeiros 100 chars):', connectionString.substring(0, 100));
-console.log('🔍 URL completa (mascarada para segurança):', connectionString.replace(/:[^:@]+@/, ':****@'));
-
-// Verificar se a URL está completa (aceitar tanto db. quanto pooler.)
-if (!connectionString.includes('@db.') && !connectionString.includes('@pooler.') && !connectionString.includes('@aws-')) {
-  console.error('❌ ERRO: URL não contém hostname válido do Supabase!');
-  console.error('   URL atual:', connectionString.substring(0, 150));
-} else {
-  console.log('✅ URL contém hostname válido do Supabase');
-}
-
-// Extrair e validar hostname da URL para debug
+// Validar hostname da URL
 try {
   const urlMatch = connectionString.match(/@([^:]+):/);
   if (urlMatch) {
     const hostname = urlMatch[1];
-    console.log('🔍 Hostname extraído da URL:', hostname);
-    
     if (hostname === 'base' || hostname.length < 5) {
       console.error('❌ ERRO CRÍTICO: Hostname inválido detectado!');
       console.error('   Hostname extraído:', hostname);
-      console.error('   URL completa (primeiros 150 chars):', connectionString.substring(0, 150));
-      console.error('   ⚠️ A URL pode estar sendo parseada incorretamente!');
     } else if (hostname.includes('pooler.supabase.com') || hostname.includes('db.') || hostname.includes('aws-')) {
-      console.log('✅ Hostname válido do Supabase detectado:', hostname);
-    } else {
-      console.warn('⚠️ Hostname não reconhecido como Supabase:', hostname);
+      console.log('✅ Hostname válido do Supabase:', hostname);
     }
-  } else {
-    console.error('❌ Não foi possível extrair hostname da URL!');
   }
 } catch (error) {
-  console.error('❌ Erro ao analisar URL:', error.message);
-}
-
-// Log detalhado antes de criar o pool
-console.log('🔍 Criando pool PostgreSQL...');
-console.log('   Connection string length:', connectionString.length);
-console.log('   Connection string (mascarada):', connectionString.replace(/:[^:@]+@/, ':****@'));
-
-// Tentar parsear a URL manualmente para verificar
-try {
-  const url = new URL(connectionString.replace('postgresql://', 'http://'));
-  console.log('🔍 URL parseada manualmente:');
-  console.log('   Protocol:', url.protocol);
-  console.log('   Username:', url.username);
-  console.log('   Password:', url.password ? '****' : 'não encontrada');
-  console.log('   Hostname:', url.hostname);
-  console.log('   Port:', url.port);
-  console.log('   Pathname:', url.pathname);
-  console.log('   Search:', url.search);
-} catch (error) {
-  console.error('❌ Erro ao parsear URL manualmente:', error.message);
+  console.error('❌ Erro ao validar hostname:', error.message);
 }
 
 // Tentar parsear a URL manualmente para usar parâmetros individuais
@@ -144,16 +104,9 @@ try {
   
   if (urlMatch) {
     const [, username, password, hostname, port, database, queryParams] = urlMatch;
-    console.log('🔍 URL parseada manualmente:');
-    console.log('   Username:', username);
-    console.log('   Password:', password ? '****' : 'não encontrada');
-    console.log('   Hostname:', hostname);
-    console.log('   Port:', port);
-    console.log('   Database:', database);
-    console.log('   Query params:', queryParams || 'nenhum');
     
     // Usar parâmetros individuais ao invés de connectionString
-    // Isso evita problemas de parsing
+    // Isso evita problemas de parsing quando username contém pontos
     poolConfig = {
       user: username,
       password: password,
@@ -172,7 +125,7 @@ try {
       } : {})
     };
     
-    console.log('✅ Usando parâmetros individuais para conexão (evita problemas de parsing)');
+    console.log('✅ Usando parâmetros individuais para conexão (hostname:', hostname + ')');
   } else {
     console.warn('⚠️ Não foi possível parsear URL manualmente, usando connectionString');
     poolConfig.connectionString = connectionString;
@@ -184,16 +137,6 @@ try {
 }
 
 const pool = new Pool(poolConfig);
-
-// Log após criar o pool para verificar configuração
-pool.on('connect', (client) => {
-  console.log('✅ Cliente PostgreSQL conectado');
-});
-
-pool.on('error', (err, client) => {
-  console.error('❌ Erro no pool PostgreSQL:', err.message);
-  console.error('   Hostname que causou erro:', err.hostname || 'não especificado');
-});
 
 pool.on('error', (err) => {
   console.error('❌ Unexpected error on idle client', err);
