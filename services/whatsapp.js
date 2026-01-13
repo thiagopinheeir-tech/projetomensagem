@@ -845,7 +845,7 @@ class WhatsAppService {
           }
         }
 
-        const bookingInfo = this.extractBookingInfoFromHistory([...history, { user_message: userMessage, ai_response: aiResponse }], this.chatbot?.getConfig?.());
+        const bookingInfo = await this.extractBookingInfoFromHistory([...history, { user_message: userMessage, ai_response: aiResponse }], this.chatbot?.getConfig?.());
         
         if (bookingInfo) {
           console.log(`📅 [WhatsApp] Informações de agendamento extraídas:`, {
@@ -1047,7 +1047,7 @@ class WhatsAppService {
    * Extrai informações de agendamento do histórico da conversa
    * Retorna null se não encontrar informações completas
    */
-  extractBookingInfoFromHistory(history, chatbotConfig = {}) {
+  async extractBookingInfoFromHistory(history, chatbotConfig = {}) {
     try {
       console.log(`📅 [extractBookingInfoFromHistory] Iniciando extração:`, {
         historyLength: history?.length || 0,
