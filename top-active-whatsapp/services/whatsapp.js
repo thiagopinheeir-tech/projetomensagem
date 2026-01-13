@@ -317,7 +317,7 @@ class WhatsAppService {
       console.log(`   Platform: ${process.platform}`);
       console.log(`   Chromium path a usar: ${chromiumPath || 'não definido'}`);
       
-      const fs = require('fs');
+      // fs já foi declarado acima (linha 297), apenas precisamos de execSync
       const { execSync } = require('child_process');
       
       // Sempre tentar encontrar o Chromium, mesmo se a variável estiver configurada
