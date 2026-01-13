@@ -6,14 +6,39 @@ let poolConfig;
 
 if (process.env.DATABASE_URL) {
   // Usar DATABASE_URL se disponível (formato: postgresql://user:password@host:port/database)
+  let connectionString = process.env.DATABASE_URL;
+  
+  // Forçar IPv4: substituir endereços IPv6 por hostname do Supabase
+  // Se a URL contém um endereço IPv6, extrair o hostname do Supabase
+  if (connectionString.includes('supabase') && connectionString.match(/\[?([0-9a-fA-F:]+)\]?:5432/)) {
+    // Extrair o hostname do Supabase (formato: db.xxxxx.supabase.co)
+    const hostnameMatch = connectionString.match(/@([^:]+):5432/);
+    if (hostnameMatch) {
+      // Se já tem hostname, usar ele
+      const hostname = hostnameMatch[1];
+      if (!hostname.match(/^[0-9a-fA-F:]+$/)) {
+        // Já é um hostname, não precisa mudar
+      } else {
+        // É um IP, tentar extrair hostname da URL original
+        const supabaseMatch = connectionString.match(/@db\.([^.]+)\.supabase\.co/);
+        if (supabaseMatch) {
+          connectionString = connectionString.replace(/@[^:]+:5432/, `@db.${supabaseMatch[1]}.supabase.co:5432`);
+        }
+      }
+    }
+  }
+  
+  // Forçar IPv4 no pool do PostgreSQL
   poolConfig = {
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL.includes('supabase') || process.env.DATABASE_URL.includes('localhost') === false 
+    connectionString: connectionString,
+    ssl: connectionString.includes('supabase') || connectionString.includes('localhost') === false 
       ? { rejectUnauthorized: false } 
       : false,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
+    // Forçar IPv4
+    family: 4,
   };
   console.log('✅ Usando DATABASE_URL para conexão');
 } else if (process.env.SUPABASE_DB_URL) {

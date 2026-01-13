@@ -1,12 +1,17 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-const pool = new Pool({
+// Configurar pool com suporte para IPv4
+let poolConfig = {
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('localhost') ? false : {
     rejectUnauthorized: false
-  }
-});
+  },
+  // Forçar IPv4 para evitar problemas com IPv6
+  family: 4,
+};
+
+const pool = new Pool(poolConfig);
 
 pool.on('error', (err) => {
   console.error('❌ Unexpected error on idle client', err);
