@@ -64,20 +64,32 @@ async function convertUserIdForTable(tableName, userId) {
     return userId;
   }
 
+  // Normalizar userId: converter string numérica para número
+  let normalizedUserId = userId;
+  if (typeof userId === 'string' && /^\d+$/.test(userId)) {
+    normalizedUserId = parseInt(userId, 10);
+  }
+
   const columnType = await detectUserIdType(tableName);
+  console.log(`🔍 [convertUserIdForTable] Tabela: ${tableName}, userId: ${userId} (${typeof userId}), tipo coluna: ${columnType}`);
   
   // Se a coluna é UUID mas userId é INTEGER, precisamos buscar o UUID do usuário
-  if (columnType === 'uuid' && typeof userId === 'number') {
+  if (columnType === 'uuid' && typeof normalizedUserId === 'number') {
     try {
       const result = await query(`
         SELECT uuid FROM users WHERE id = $1 LIMIT 1
-      `, [userId]);
+      `, [normalizedUserId]);
       
       if (result.rows.length > 0) {
-        return result.rows[0].uuid;
+        const uuid = result.rows[0].uuid;
+        console.log(`✅ [convertUserIdForTable] Convertido ${normalizedUserId} -> ${uuid}`);
+        return uuid;
+      } else {
+        console.warn(`⚠️ [convertUserIdForTable] Usuário ${normalizedUserId} não encontrado na tabela users`);
       }
     } catch (error) {
-      console.error(`❌ Erro ao buscar UUID do usuário ${userId}:`, error);
+      console.error(`❌ Erro ao buscar UUID do usuário ${normalizedUserId}:`, error.message);
+      throw error;
     }
   }
   

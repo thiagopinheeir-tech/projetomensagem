@@ -10,7 +10,18 @@ class ConversationManager {
       // Converter userId se fornecido
       let convertedUserId = null;
       if (userId) {
-        convertedUserId = await convertUserIdForTable('conversations', userId);
+        // Normalizar userId: converter string para número se necessário
+        let normalizedUserId = userId;
+        if (typeof userId === 'string' && /^\d+$/.test(userId)) {
+          normalizedUserId = parseInt(userId, 10);
+        }
+        
+        try {
+          convertedUserId = await convertUserIdForTable('conversations', normalizedUserId);
+        } catch (convertError) {
+          console.error(`❌ [ConversationManager] Erro ao converter userId ${userId} para saveMessage:`, convertError.message);
+          convertedUserId = null;
+        }
       }
       
       await query(
@@ -33,7 +44,18 @@ class ConversationManager {
       // Converter userId se fornecido
       let convertedUserId = null;
       if (userId) {
-        convertedUserId = await convertUserIdForTable('conversations', userId);
+        // Normalizar userId: converter string para número se necessário
+        let normalizedUserId = userId;
+        if (typeof userId === 'string' && /^\d+$/.test(userId)) {
+          normalizedUserId = parseInt(userId, 10);
+        }
+        
+        try {
+          convertedUserId = await convertUserIdForTable('conversations', normalizedUserId);
+        } catch (convertError) {
+          console.error(`❌ [ConversationManager] Erro ao converter userId ${userId} para getHistory:`, convertError.message);
+          convertedUserId = null;
+        }
       }
       
       let queryText = `SELECT user_message, ai_response, created_at
@@ -71,7 +93,18 @@ class ConversationManager {
       // Converter userId se fornecido
       let convertedUserId = null;
       if (userId) {
-        convertedUserId = await convertUserIdForTable('conversations', userId);
+        // Normalizar userId: converter string para número se necessário
+        let normalizedUserId = userId;
+        if (typeof userId === 'string' && /^\d+$/.test(userId)) {
+          normalizedUserId = parseInt(userId, 10);
+        }
+        
+        try {
+          convertedUserId = await convertUserIdForTable('conversations', normalizedUserId);
+        } catch (convertError) {
+          console.error(`❌ [ConversationManager] Erro ao converter userId ${userId} para getStats:`, convertError.message);
+          convertedUserId = null;
+        }
       }
       
       let queryText = `SELECT 
@@ -104,7 +137,20 @@ class ConversationManager {
       // Converter userId se fornecido
       let convertedUserId = null;
       if (userId) {
-        convertedUserId = await convertUserIdForTable('conversations', userId);
+        // Normalizar userId: converter string para número se necessário
+        let normalizedUserId = userId;
+        if (typeof userId === 'string' && /^\d+$/.test(userId)) {
+          normalizedUserId = parseInt(userId, 10);
+        }
+        
+        try {
+          convertedUserId = await convertUserIdForTable('conversations', normalizedUserId);
+          console.log(`🔍 [ConversationManager] userId convertido: ${userId} (${typeof userId}) -> ${convertedUserId} (${typeof convertedUserId})`);
+        } catch (convertError) {
+          console.error(`❌ [ConversationManager] Erro ao converter userId ${userId}:`, convertError.message);
+          // Se a conversão falhar, tentar usar null para não quebrar a query
+          convertedUserId = null;
+        }
       }
       
       let queryText = `SELECT 
