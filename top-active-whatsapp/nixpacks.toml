@@ -1,8 +1,10 @@
 [phases.setup]
-nixPkgs = ['nodejs_20', 'chromium', 'chromedriver']
+nixPkgs = ['nodejs_20']
 
 [phases.install]
 cmds = [
+  'apt-get update',
+  'apt-get install -y chromium chromium-sandbox',
   'npm ci'
 ]
 
@@ -13,6 +15,3 @@ cmds = [
 
 [start]
 cmd = 'node server.js'
-
-[staticAssets]
-'/' = 'dist'
