@@ -157,20 +157,19 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 try {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`✅ 🚀 JT DEV NOCODE 2.0 Started on port ${PORT}`);
     console.log(`📱 Health: http://localhost:${PORT}/health`);
     console.log(`🔐 Auth: http://localhost:${PORT}/api/auth/register`);
     console.log(`👤 Users: http://localhost:${PORT}/api/users/profile`);
     console.log(`💬 Messages: http://localhost:${PORT}/api/messages/send-simple`);
     
-    // Inicializar WebSocket Server (usa variável de ambiente ou porta padrão diferente do Express)
+    // Inicializar WebSocket Server anexado ao servidor HTTP (mesma porta)
+    // Isso funciona melhor no Railway que expõe apenas uma porta
     try {
       const wsManager = require('./services/websocket');
-      // Garantir que WebSocket use porta diferente do Express
-      const WS_PORT = process.env.WS_PORT || (parseInt(PORT) + 1) || 5001;
-      wsManager.initialize(parseInt(WS_PORT));
-      console.log(`🚀 WebSocket server iniciado na porta ${WS_PORT}`);
+      // Passar o servidor HTTP para o WebSocket usar a mesma porta
+      wsManager.initialize(server);
     } catch (wsError) {
       console.error('❌ Erro ao inicializar WebSocket:', wsError);
     }

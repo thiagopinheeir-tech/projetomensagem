@@ -7,12 +7,21 @@ class WebSocketManager {
     this.wss = null;
   }
 
-  initialize(port = 5001) {
-    this.wss = new WebSocket.Server({ port });
+  initialize(portOrServer = 5001) {
+    // Se receber um servidor HTTP (Express), usar ele. Senão, criar servidor separado
+    if (typeof portOrServer === 'object' && portOrServer.listen) {
+      // É um servidor HTTP - anexar WebSocket a ele
+      this.wss = new WebSocket.Server({ server: portOrServer, path: '/ws' });
+      console.log(`🚀 WebSocket server anexado ao servidor HTTP`);
+    } else {
+      // É uma porta - criar servidor separado (modo desenvolvimento)
+      this.wss = new WebSocket.Server({ port: portOrServer });
+      console.log(`🚀 WebSocket server iniciado na porta ${portOrServer}`);
+    }
     
     this.wss.on('connection', async (ws, req) => {
       try {
-        const url = new URL(req.url, `http://localhost:${port}`);
+        const url = new URL(req.url, `http://localhost:${typeof portOrServer === 'number' ? portOrServer : 5000}`);
         const userId = url.searchParams.get('user');
         
         if (!userId) {
@@ -59,7 +68,6 @@ class WebSocketManager {
       }
     });
 
-    console.log(`🚀 WebSocket server iniciado na porta ${port}`);
   }
 
   broadcast(type, data, userId = null) {
