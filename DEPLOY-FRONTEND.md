@@ -17,56 +17,79 @@
 
 ## 📋 Deploy no Vercel (Recomendado)
 
-### Passo 1: Preparar o Frontend
+### Passo 1: Criar o Projeto
 
 1. **Acesse:** https://vercel.com
 2. **Faça login** com sua conta GitHub
-3. **Clique em:** "Add New Project"
+3. **Clique em:** "Add New Project" (ou "New Project")
 4. **Selecione o repositório:** `thiagopinheeir-tech/projetomensagem`
+5. **Clique em:** "Import"
 
-### Passo 2: Configurar o Projeto
+### Passo 2: Configurar ANTES do Deploy
 
-**Root Directory:**
-```
-top-active-whatsapp/frontend
-```
+**IMPORTANTE:** Antes de clicar em "Deploy", configure as opções abaixo na tela de configuração:
 
-**Build Command:**
-```bash
-npm install && npm run build
-```
+**1. Framework Preset:**
+- Deixe como **"Other"** ou **"Vite"** (se aparecer)
 
-**Output Directory:**
-```
-dist
-```
+**2. Root Directory:**
+- Clique em **"Edit"** ou **"Configure"** ao lado de "Root Directory"
+- Digite: `top-active-whatsapp/frontend`
+- Ou clique em **"Browse"** e navegue até a pasta `top-active-whatsapp/frontend`
 
-**Install Command:**
-```bash
-npm install
-```
+**3. Build Command:**
+- Deixe como está ou digite: `npm run build`
 
-### Passo 3: Variáveis de Ambiente
+**4. Output Directory:**
+- Digite: `dist`
 
-Adicione estas variáveis no Vercel:
+**5. Install Command:**
+- Deixe como: `npm install`
 
-**VITE_API_URL:**
-```
-https://seu-backend.railway.app
-```
-*(Substitua `seu-backend.railway.app` pela URL do seu backend no Railway)*
+### Passo 3: Adicionar Variáveis de Ambiente
 
-**VITE_WS_PORT:** (Opcional - apenas para desenvolvimento local)
-```
-5001
-```
-*(Em produção, o WebSocket usa a mesma URL do backend no path `/ws`)*
+**Na mesma tela de configuração, role até "Environment Variables":**
 
-### Passo 4: Deploy
+1. Clique em **"Add"** ou **"Add Variable"**
+2. Adicione:
+   - **Name:** `VITE_API_URL`
+   - **Value:** `https://seu-backend.railway.app`
+     *(Substitua pela URL real do seu backend no Railway)*
+3. Clique em **"Add"** novamente para adicionar (opcional):
+   - **Name:** `VITE_WS_PORT`
+   - **Value:** `5001`
 
-1. Clique em **"Deploy"**
-2. Aguarde 2-3 minutos
-3. O Vercel vai gerar uma URL (ex: `https://seu-projeto.vercel.app`)
+### Passo 4: Fazer o Deploy
+
+1. Clique em **"Deploy"** (botão azul no final da página)
+2. Aguarde 2-3 minutos enquanto o Vercel faz o build
+3. Quando terminar, o Vercel vai mostrar uma URL (ex: `https://seu-projeto.vercel.app`)
+
+---
+
+### ⚠️ Se não encontrar "Root Directory" na tela inicial:
+
+**Opção A: Configurar DEPOIS do primeiro deploy**
+
+1. Faça o deploy normalmente (mesmo que dê erro)
+2. Vá em **Settings** (ícone de engrenagem) do projeto
+3. Vá em **"Build & Development Settings"**
+4. Role até **"Root Directory"**
+5. Clique em **"Edit"**
+6. Digite: `top-active-whatsapp/frontend`
+7. Clique em **"Save"**
+8. Vá em **"Deployments"** e clique nos 3 pontinhos do último deploy
+9. Clique em **"Redeploy"**
+
+**Opção B: Usar vercel.json (MAIS FÁCIL)**
+
+O arquivo `vercel.json` já está criado em `top-active-whatsapp/frontend/vercel.json`.
+
+**Para usar:**
+1. No Vercel, quando selecionar o repositório, ele vai detectar automaticamente
+2. **OU** configure manualmente:
+   - Root Directory: `top-active-whatsapp/frontend`
+   - O Vercel vai ler o `vercel.json` automaticamente
 
 ---
 
