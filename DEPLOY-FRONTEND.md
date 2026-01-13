@@ -17,34 +17,52 @@
 
 ## 📋 Deploy no Vercel (Recomendado)
 
+### 🎯 Método Mais Simples (Recomendado)
+
+**O Vercel pode detectar automaticamente o frontend!** Siga estes passos:
+
 ### Passo 1: Criar o Projeto
 
 1. **Acesse:** https://vercel.com
 2. **Faça login** com sua conta GitHub
-3. **Clique em:** "Add New Project" (ou "New Project")
+3. **Clique em:** "Add New Project" (ou botão "New Project" no canto superior direito)
 4. **Selecione o repositório:** `thiagopinheeir-tech/projetomensagem`
 5. **Clique em:** "Import"
 
-### Passo 2: Configurar ANTES do Deploy
+### Passo 2: Configurar o Projeto
 
-**IMPORTANTE:** Antes de clicar em "Deploy", configure as opções abaixo na tela de configuração:
+**Na tela de configuração que aparece, procure por:**
 
-**1. Framework Preset:**
-- Deixe como **"Other"** ou **"Vite"** (se aparecer)
+#### 📁 Onde encontrar "Root Directory":
 
-**2. Root Directory:**
-- Clique em **"Edit"** ou **"Configure"** ao lado de "Root Directory"
+**Opção 1: Na tela inicial de configuração**
+- Procure uma seção chamada **"Configure Project"** ou **"Project Settings"**
+- Procure por **"Root Directory"** ou **"Root"**
+- Se não aparecer, role a página para baixo
+- Pode estar em uma seção **"Advanced"** ou **"Show Advanced Options"**
+
+**Opção 2: Se não aparecer na tela inicial**
+- Deixe como está e clique em **"Deploy"** primeiro
+- Depois configure (veja "Opção A" abaixo)
+
+#### ⚙️ Configurações necessárias:
+
+**1. Root Directory:**
+- Clique em **"Edit"**, **"Change"** ou **"Browse"** ao lado de "Root Directory"
 - Digite: `top-active-whatsapp/frontend`
-- Ou clique em **"Browse"** e navegue até a pasta `top-active-whatsapp/frontend`
+- **OU** clique em **"Browse"** e selecione a pasta `top-active-whatsapp/frontend`
+
+**2. Framework Preset:**
+- Se aparecer, selecione **"Vite"** ou deixe **"Other"**
 
 **3. Build Command:**
-- Deixe como está ou digite: `npm run build`
+- Deixe: `npm run build` (já deve estar preenchido)
 
 **4. Output Directory:**
 - Digite: `dist`
 
 **5. Install Command:**
-- Deixe como: `npm install`
+- Deixe: `npm install`
 
 ### Passo 3: Adicionar Variáveis de Ambiente
 
