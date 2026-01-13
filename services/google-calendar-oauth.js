@@ -360,18 +360,11 @@ module.exports = {
       throw err;
     }
 
-    try {
-      const { calendar, calendarId, timeZone: tz } = await this.getCalendarClientForUser(userId);
-      console.log(`✅ [createAppointment] Cliente do calendário obtido:`, {
-        calendarId: calendarId?.substring(0, 50),
-        timeZone: tz
-      });
-    } catch (clientError) {
-      console.error('❌ [createAppointment] Erro ao obter cliente do calendário:', clientError.message);
-      throw clientError;
-    }
-
     const { calendar, calendarId, timeZone: tz } = await this.getCalendarClientForUser(userId);
+    console.log(`✅ [createAppointment] Cliente do calendário obtido:`, {
+      calendarId: calendarId?.substring(0, 50),
+      timeZone: tz
+    });
 
     const start = toDate(startISO);
     const duration = parseInt(String(durationMinutes || ''), 10);

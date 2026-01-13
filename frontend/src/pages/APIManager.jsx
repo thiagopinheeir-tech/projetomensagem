@@ -32,10 +32,20 @@ const APIManager = () => {
   const [googleCalendars, setGoogleCalendars] = useState([]);
   const [selectedCalendarId, setSelectedCalendarId] = useState('');
   const [loadingGoogle, setLoadingGoogle] = useState(false);
+  
+  const [premiumShearsConfig, setPremiumShearsConfig] = useState({
+    api_url: '',
+    api_key: '',
+    enabled: false,
+    api_url_preview: null,
+    has_key: false
+  });
+  const [showPremiumShearsKey, setShowPremiumShearsKey] = useState(false);
+  const [loadingScheduler, setLoadingScheduler] = useState(false);
 
   useEffect(() => {
     (async () => {
-      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadGoogleStatus()]);
+      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadGoogleStatus(), loadSchedulerConfig()]);
     })();
   }, []);
 
@@ -249,6 +259,53 @@ const APIManager = () => {
 
   const handleGoogleChange = (field, value) => {
     setGoogleOAuth(prev => ({ ...prev, [field]: value }));
+  };
+
+  const loadSchedulerConfig = async () => {
+    try {
+      setLoadingScheduler(true);
+      const response = await api.get('/api/config/scheduler');
+
+      if (response.data.success) {
+        const cfg = response.data.config;
+        setPremiumShearsConfig({
+          api_url: cfg.api_url || '',
+          api_key: '',
+          enabled: cfg.enabled || false,
+          api_url_preview: cfg.api_url_preview || null,
+          has_key: cfg.has_key || false
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração do scheduler:', error);
+      toast.error('Erro ao carregar configuração do scheduler');
+    } finally {
+      setLoadingScheduler(false);
+    }
+  };
+
+  const handleSaveScheduler = async () => {
+    try {
+      setSaving(true);
+      const payload = {
+        api_url: premiumShearsConfig.api_url?.trim() || null,
+        api_key: premiumShearsConfig.api_key?.trim() || null,
+        enabled: premiumShearsConfig.enabled
+      };
+
+      const response = await api.put('/api/config/scheduler', payload);
+
+      if (response.data.success) {
+        toast.success('Configuração do scheduler salva com sucesso!');
+        setPremiumShearsConfig(prev => ({ ...prev, api_key: '' }));
+        setTimeout(loadSchedulerConfig, 1000);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Erro ao salvar configuração do scheduler');
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -521,6 +578,105 @@ const APIManager = () => {
                 </div>
               </div>
             </div>
+          </div>
+        </Card>
+
+        {/* Card Sistema de Agendamento (Premium Shears) */}
+        <Card title="Sistema de Agendamento" icon={Calendar}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                URL da API do Premium Shears Scheduler
+              </label>
+              
+              {premiumShearsConfig.api_url_preview && !premiumShearsConfig.api_url && (
+                <div className="mb-2">
+                  <Badge variant="success" className="flex items-center gap-2 w-fit">
+                    <Key size={14} />
+                    URL configurada: {premiumShearsConfig.api_url_preview}
+                  </Badge>
+                </div>
+              )}
+
+              <Input
+                type="text"
+                value={premiumShearsConfig.api_url}
+                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, api_url: e.target.value})}
+                placeholder={premiumShearsConfig.api_url_preview ? 'Deixe em branco para manter a URL atual' : 'https://seu-projeto.supabase.co/functions/v1/api'}
+                icon={Key}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Configure a URL da API do seu sistema de agendamento
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                API Key (opcional)
+              </label>
+              
+              {premiumShearsConfig.has_key && !premiumShearsConfig.api_key && (
+                <div className="mb-2">
+                  <Badge variant="success" className="flex items-center gap-2 w-fit">
+                    <Key size={14} />
+                    API Key configurada
+                  </Badge>
+                </div>
+              )}
+
+              <div className="relative">
+                <Input
+                  type={showPremiumShearsKey ? 'text' : 'password'}
+                  value={premiumShearsConfig.api_key}
+                  onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, api_key: e.target.value})}
+                  placeholder={premiumShearsConfig.has_key ? 'Deixe em branco para manter a chave atual' : 'Sua API key se necessário'}
+                  icon={Key}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPremiumShearsKey(!showPremiumShearsKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  {showPremiumShearsKey ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="use-premium-shears"
+                checked={premiumShearsConfig.enabled}
+                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, enabled: e.target.checked})}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <label htmlFor="use-premium-shears" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Usar Premium Shears Scheduler ao invés de Google Calendar
+              </label>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Webhook URL para o Premium Shears:</strong>
+              </p>
+              <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1 break-all">
+                {api.defaults.baseURL || 'https://projetomensagem-production.up.railway.app'}/api/webhooks/premium-shears/appointment-created
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                Configure esta URL no seu sistema de agendamento para receber notificações quando agendamentos forem criados
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSaveScheduler}
+              disabled={saving || loadingScheduler}
+              className="w-full"
+            >
+              <Save size={18} />
+              {saving ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
+            </Button>
           </div>
         </Card>
 

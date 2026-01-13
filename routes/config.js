@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
+const { requireUserId } = require('../middleware/data-isolation');
 const { query } = require('../config/database');
 const { supabase, db, isConfigured } = require('../config/supabase');
 const crypto = require('crypto');
@@ -212,6 +213,237 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
     res.json({
       success: true,
       message: 'Configuração atualizada com sucesso! O chatbot será atualizado automaticamente.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Obter configuração do Premium Shears Scheduler
+router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    let config = null;
+
+    // Tentar buscar do Supabase primeiro
+    if (isConfigured) {
+      try {
+        const { data: supabaseConfig, error } = await supabase
+          .from('configurations')
+          .select('premium_shears_api_url, premium_shears_api_key_encrypted, use_premium_shears_scheduler')
+          .eq('user_id', userId)
+          .single();
+
+        if (!error && supabaseConfig) {
+          let apiUrlPreview = null;
+          if (supabaseConfig.premium_shears_api_url) {
+            const url = supabaseConfig.premium_shears_api_url;
+            apiUrlPreview = url.length > 50 ? `${url.substring(0, 50)}...` : url;
+          }
+
+          let hasKey = !!supabaseConfig.premium_shears_api_key_encrypted;
+
+          config = {
+            api_url: supabaseConfig.premium_shears_api_url || null,
+            api_url_preview: apiUrlPreview,
+            has_key: hasKey,
+            enabled: supabaseConfig.use_premium_shears_scheduler || false
+          };
+        }
+      } catch (error) {
+        console.warn('⚠️ [GET /config/scheduler] Erro ao buscar do Supabase:', error.message);
+      }
+    }
+
+    // Fallback: buscar do PostgreSQL local
+    if (!config) {
+      try {
+        const result = await query(
+          `SELECT premium_shears_api_url, premium_shears_api_key_encrypted, use_premium_shears_scheduler
+           FROM config_ai
+           WHERE user_id = $1`,
+          [userId]
+        );
+
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          let apiUrlPreview = null;
+          if (row.premium_shears_api_url) {
+            const url = row.premium_shears_api_url;
+            apiUrlPreview = url.length > 50 ? `${url.substring(0, 50)}...` : url;
+          }
+
+          config = {
+            api_url: row.premium_shears_api_url || null,
+            api_url_preview: apiUrlPreview,
+            has_key: !!row.premium_shears_api_key_encrypted,
+            enabled: row.use_premium_shears_scheduler || false
+          };
+        } else {
+          config = {
+            api_url: null,
+            api_url_preview: null,
+            has_key: false,
+            enabled: false
+          };
+        }
+      } catch (error) {
+        console.error('❌ [GET /config/scheduler] Erro ao buscar do PostgreSQL:', error);
+        throw error;
+      }
+    }
+
+    if (!config) {
+      config = {
+        api_url: null,
+        api_url_preview: null,
+        has_key: false,
+        enabled: false
+      };
+    }
+
+    res.json({
+      success: true,
+      config
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Atualizar configuração do Premium Shears Scheduler
+router.put('/scheduler', authMiddleware, requireUserId, async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const { api_url, api_key, enabled } = req.body;
+
+    // Validar URL se fornecida
+    if (api_url && api_url.trim()) {
+      try {
+        new URL(api_url);
+      } catch (urlError) {
+        return res.status(400).json({
+          success: false,
+          message: 'URL da API inválida'
+        });
+      }
+    }
+
+    // Criptografar API key se fornecida
+    let encryptedKey = null;
+    if (api_key && api_key.trim()) {
+      encryptedKey = encryption.encrypt(api_key.trim());
+    }
+
+    // Preparar dados para atualização
+    const updateData = {};
+    if (api_url !== undefined) {
+      updateData.premium_shears_api_url = api_url ? api_url.trim() : null;
+    }
+    if (encryptedKey !== null) {
+      updateData.premium_shears_api_key_encrypted = encryptedKey;
+    }
+    if (enabled !== undefined) {
+      updateData.use_premium_shears_scheduler = enabled === true || enabled === 'true';
+    }
+
+    // Salvar no Supabase primeiro
+    if (isConfigured) {
+      try {
+        // Verificar se já existe configuração
+        const { data: existing } = await supabase
+          .from('configurations')
+          .select('id')
+          .eq('user_id', userId)
+          .single();
+
+        if (existing) {
+          const { error: updateError } = await supabase
+            .from('configurations')
+            .update({
+              ...updateData,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', userId);
+
+          if (updateError) {
+            console.error('❌ [PUT /config/scheduler] Erro ao atualizar no Supabase:', updateError);
+          } else {
+            console.log('✅ [PUT /config/scheduler] Configuração atualizada no Supabase');
+          }
+        } else {
+          const { error: insertError } = await supabase
+            .from('configurations')
+            .insert([{
+              user_id: userId,
+              ...updateData
+            }]);
+
+          if (insertError) {
+            console.error('❌ [PUT /config/scheduler] Erro ao inserir no Supabase:', insertError);
+          } else {
+            console.log('✅ [PUT /config/scheduler] Configuração inserida no Supabase');
+          }
+        }
+      } catch (error) {
+        console.error('❌ [PUT /config/scheduler] Erro ao salvar no Supabase:', error);
+      }
+    }
+
+    // Fallback: salvar no PostgreSQL local
+    try {
+      // Construir query dinamicamente
+      const fields = ['user_id'];
+      const values = [userId];
+      const placeholders = ['$1'];
+      let paramIndex = 2;
+
+      const updateFields = [];
+      
+      if (api_url !== undefined) {
+        fields.push('premium_shears_api_url');
+        values.push(api_url ? api_url.trim() : null);
+        placeholders.push(`$${paramIndex}`);
+        updateFields.push(`premium_shears_api_url = EXCLUDED.premium_shears_api_url`);
+        paramIndex++;
+      }
+
+      if (encryptedKey !== null) {
+        fields.push('premium_shears_api_key_encrypted');
+        values.push(encryptedKey);
+        placeholders.push(`$${paramIndex}`);
+        updateFields.push(`premium_shears_api_key_encrypted = EXCLUDED.premium_shears_api_key_encrypted`);
+        paramIndex++;
+      }
+
+      if (enabled !== undefined) {
+        fields.push('use_premium_shears_scheduler');
+        values.push(enabled === true || enabled === 'true');
+        placeholders.push(`$${paramIndex}`);
+        updateFields.push(`use_premium_shears_scheduler = EXCLUDED.use_premium_shears_scheduler`);
+        paramIndex++;
+      }
+
+      updateFields.push('updated_at = CURRENT_TIMESTAMP');
+
+      if (fields.length > 1) {
+        await query(
+          `INSERT INTO config_ai (${fields.join(', ')})
+           VALUES (${placeholders.join(', ')})
+           ON CONFLICT (user_id) DO UPDATE SET
+             ${updateFields.join(', ')}`,
+          values
+        );
+        console.log('✅ [PUT /config/scheduler] Configuração salva no PostgreSQL');
+      }
+    } catch (error) {
+      console.error('❌ [PUT /config/scheduler] Erro ao salvar no PostgreSQL:', error);
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      message: 'Configuração do scheduler atualizada com sucesso!'
     });
   } catch (error) {
     next(error);
