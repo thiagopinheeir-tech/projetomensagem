@@ -6,18 +6,55 @@ let connectionString = process.env.DATABASE_URL;
 
 // Corrigir URL se contiver endereço IPv6: substituir por hostname do Supabase
 if (connectionString && connectionString.includes('supabase')) {
-  // Detectar se há um IP IPv6 na URL
-  const ipv6Match = connectionString.match(/@(\[?[0-9a-fA-F:]+\]?):5432/);
-  if (ipv6Match && ipv6Match[1].includes(':')) {
+  // Detectar IPv6 (formato: @2600:1f1e:...:5432 ou @[2600:1f1e:...]:5432)
+  // IPv6 tem múltiplos dois pontos e não contém pontos
+  const ipv6Pattern = /@(\[?[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){7}\]?):5432/;
+  const ipv6Match = connectionString.match(ipv6Pattern);
+  
+  if (ipv6Match) {
+    console.log('⚠️ Detectado IP IPv6 na DATABASE_URL:', ipv6Match[1]);
+    
     // Extrair o project ID do Supabase
-    const projectId = process.env.SUPABASE_URL 
-      ? process.env.SUPABASE_URL.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1]
-      : connectionString.match(/db\.([^.]+)\.supabase\.co/)?.[1];
+    let projectId = null;
+    
+    // Tentar 1: De SUPABASE_URL
+    if (process.env.SUPABASE_URL) {
+      const supabaseMatch = process.env.SUPABASE_URL.match(/https?:\/\/([^.]+)\.supabase\.co/);
+      if (supabaseMatch) {
+        projectId = supabaseMatch[1];
+        console.log('✅ Project ID extraído de SUPABASE_URL:', projectId);
+      }
+    }
+    
+    // Tentar 2: Da própria DATABASE_URL (se tiver hostname em algum lugar)
+    if (!projectId) {
+      const dbMatch = connectionString.match(/db\.([^.]+)\.supabase\.co/);
+      if (dbMatch) {
+        projectId = dbMatch[1];
+        console.log('✅ Project ID extraído da DATABASE_URL:', projectId);
+      }
+    }
+    
+    // Tentar 3: Do hostname do Supabase (formato: hhhifxikyhvruwvmaduq)
+    if (!projectId && process.env.SUPABASE_URL) {
+      const urlMatch = process.env.SUPABASE_URL.match(/https?:\/\/([^.]+)/);
+      if (urlMatch) {
+        projectId = urlMatch[1];
+        console.log('✅ Project ID extraído do hostname SUPABASE_URL:', projectId);
+      }
+    }
     
     if (projectId) {
       // Substituir IP IPv6 pelo hostname do Supabase
-      connectionString = connectionString.replace(/@\[?[0-9a-fA-F:]+\]?:5432/, `@db.${projectId}.supabase.co:5432`);
-      console.log('⚠️ Substituído IP IPv6 por hostname do Supabase na DATABASE_URL');
+      const oldUrl = connectionString;
+      connectionString = connectionString.replace(/@\[?[0-9a-fA-F:]{15,}\]?:5432/, `@db.${projectId}.supabase.co:5432`);
+      console.log('✅ Substituído IP IPv6 por hostname do Supabase');
+      console.log('   Antes:', oldUrl.substring(0, 50) + '...');
+      console.log('   Depois:', connectionString.substring(0, 50) + '...');
+    } else {
+      console.error('❌ Não foi possível extrair project ID do Supabase!');
+      console.error('   SUPABASE_URL:', process.env.SUPABASE_URL || 'NÃO CONFIGURADO');
+      console.error('   DATABASE_URL (primeiros 100 chars):', connectionString.substring(0, 100));
     }
   }
 }
