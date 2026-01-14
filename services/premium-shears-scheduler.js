@@ -86,7 +86,16 @@ async function apiRequest(userId, method, endpoint, body = null) {
     throw err;
   }
 
-  const url = `${config.apiUrl.replace(/\/$/, '')}${endpoint}`;
+  // Remover /api do final da URL base se existir, pois os endpoints já incluem /api
+  // Mas na verdade, a URL base já termina com /api, então os endpoints devem começar sem /api
+  let baseUrl = config.apiUrl.replace(/\/$/, '');
+  // Se a URL base termina com /api, remover para evitar duplicação
+  if (baseUrl.endsWith('/api')) {
+    baseUrl = baseUrl.replace(/\/api$/, '');
+  }
+  // Garantir que o endpoint começa com /
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${baseUrl}${cleanEndpoint}`;
   const headers = {
     'Content-Type': 'application/json'
   };
@@ -159,7 +168,7 @@ module.exports = {
       notes: notes || null
     };
 
-    const response = await apiRequest(userId, 'POST', '/api/appointments', body);
+    const response = await apiRequest(userId, 'POST', '/appointments', body);
 
     return {
       eventId: response.appointmentId || response.appointment?.id,
@@ -189,7 +198,7 @@ module.exports = {
       params.append('intervalMinutes', String(intervalMinutes));
     }
 
-    const response = await apiRequest(userId, 'GET', `/api/appointments/available-slots?${params.toString()}`);
+    const response = await apiRequest(userId, 'GET', `/appointments/available-slots?${params.toString()}`);
 
     return (response.slots || []).map(slot => ({
       startISO: slot.startISO,
@@ -216,7 +225,7 @@ module.exports = {
       params.append('intervalMinutes', String(intervalMinutes));
     }
 
-    const response = await apiRequest(userId, 'GET', `/api/appointments/check-availability?${params.toString()}`);
+    const response = await apiRequest(userId, 'GET', `/appointments/check-availability?${params.toString()}`);
 
     return response.available === true;
   },
@@ -231,7 +240,7 @@ module.exports = {
       throw err;
     }
 
-    await apiRequest(userId, 'DELETE', `/api/appointments/${eventId}`);
+    await apiRequest(userId, 'DELETE', `/appointments/${eventId}`);
 
     return { success: true };
   },
