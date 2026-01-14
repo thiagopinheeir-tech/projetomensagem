@@ -149,6 +149,22 @@ router.post('/premium-shears/appointment-created', async (req, res) => {
       // Não falhar o webhook se a notificação falhar
     }
 
+    // Enviar notificação para a barbearia (Premium Shears sempre envia para barbearia)
+    try {
+      await appointmentNotifier.sendBarbershopNotification(finalUserId, 'created', {
+        phone: phone,
+        client_name: clientName || null,
+        service: service,
+        start_time: new Date(startTime),
+        end_time: new Date(endTime),
+        notes: notes || null
+      });
+      console.log('✅ [webhook] Notificação enviada para barbearia');
+    } catch (barbershopNotifyError) {
+      console.error('⚠️ [webhook] Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
+      // Não falhar o webhook se a notificação falhar
+    }
+
     res.json({
       success: true,
       message: 'Agendamento processado com sucesso',

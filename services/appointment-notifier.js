@@ -136,8 +136,150 @@ async function sendAppointmentConfirmation(phone, userId, newAppointmentId = nul
   }
 }
 
+/**
+ * Busca o número da barbearia configurado para um usuário
+ */
+async function getBarbershopPhone(userId) {
+  if (!userId) return null;
+
+  // Tentar buscar do Supabase primeiro
+  if (isConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('configurations')
+        .select('barbearia_phone')
+        .eq('user_id', userId)
+        .single();
+
+      if (!error && data && data.barbearia_phone) {
+        return data.barbearia_phone.replace(/\D/g, ''); // Apenas números
+      }
+    } catch (error) {
+      console.warn('⚠️ [getBarbershopPhone] Erro ao buscar do Supabase:', error.message);
+    }
+  }
+
+  // Fallback: buscar do PostgreSQL local
+  try {
+    const result = await query(
+      `SELECT barbearia_phone FROM config_ai WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length > 0 && result.rows[0].barbearia_phone) {
+      return result.rows[0].barbearia_phone.replace(/\D/g, ''); // Apenas números
+    }
+  } catch (error) {
+    console.warn('⚠️ [getBarbershopPhone] Erro ao buscar do PostgreSQL:', error.message);
+  }
+
+  return null;
+}
+
+/**
+ * Envia notificação para a barbearia sobre um agendamento
+ */
+async function sendBarbershopNotification(userId, eventType, appointmentData) {
+  try {
+    const barbershopPhone = await getBarbershopPhone(userId);
+
+    if (!barbershopPhone) {
+      console.log('ℹ️ [sendBarbershopNotification] Número da barbearia não configurado, pulando notificação');
+      return { success: false, error: 'Número da barbearia não configurado' };
+    }
+
+    // Verificar se WhatsApp está conectado
+    if (!whatsappManager.isReady(userId)) {
+      console.warn(`⚠️ [sendBarbershopNotification] WhatsApp não conectado para usuário ${userId}`);
+      return { success: false, error: 'WhatsApp não conectado' };
+    }
+
+    let message = '';
+
+    switch (eventType) {
+      case 'created':
+        {
+          const startDate = new Date(appointmentData.start_time);
+          const endDate = new Date(appointmentData.end_time);
+          
+          const dateStr = startDate.toLocaleDateString('pt-BR', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric' 
+          });
+          
+          const startTime = startDate.toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          
+          const endTime = endDate.toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+
+          message = `📅 *NOVO AGENDAMENTO*\n\n`;
+          message += `👤 Cliente: ${appointmentData.client_name || 'Não informado'}\n`;
+          message += `📞 Telefone: ${appointmentData.phone}\n`;
+          message += `✂️ Serviço: ${appointmentData.service || 'Não especificado'}\n`;
+          message += `📆 Data: ${dateStr}\n`;
+          message += `⏰ Horário: ${startTime} - ${endTime}\n`;
+          if (appointmentData.notes) {
+            message += `📝 Observações: ${appointmentData.notes}\n`;
+          }
+        }
+        break;
+
+      case 'cancelled':
+        {
+          const startDate = new Date(appointmentData.start_time);
+          
+          const dateStr = startDate.toLocaleDateString('pt-BR', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric' 
+          });
+          
+          const startTime = startDate.toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+
+          message = `❌ *AGENDAMENTO CANCELADO*\n\n`;
+          message += `👤 Cliente: ${appointmentData.client_name || 'Não informado'}\n`;
+          message += `📞 Telefone: ${appointmentData.phone}\n`;
+          message += `✂️ Serviço: ${appointmentData.service || 'Não especificado'}\n`;
+          message += `📆 Data: ${dateStr}\n`;
+          message += `⏰ Horário: ${startTime}\n`;
+        }
+        break;
+
+      default:
+        console.warn(`⚠️ [sendBarbershopNotification] Tipo de evento desconhecido: ${eventType}`);
+        return { success: false, error: 'Tipo de evento desconhecido' };
+    }
+
+    // Enviar via WhatsApp
+    const result = await whatsappManager.sendMessage(userId, barbershopPhone, message);
+
+    console.log(`✅ [sendBarbershopNotification] Notificação enviada para barbearia ${barbershopPhone}`);
+    
+    return { 
+      success: true, 
+      messageId: result.id
+    };
+  } catch (error) {
+    console.error(`❌ [sendBarbershopNotification] Erro ao enviar notificação:`, error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
+}
+
 module.exports = {
   sendAppointmentConfirmation,
+  sendBarbershopNotification,
   formatAppointmentsList,
   getFutureAppointments
 };
