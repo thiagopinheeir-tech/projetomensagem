@@ -436,9 +436,20 @@ const toggleChatbot = async (req, res, next) => {
 
     // Salvar status no Supabase
     if (isConfigured) {
+      // Converter userId para UUID se necessário
+      let convertedUserId = userId;
+      if (userId) {
+        try {
+          const { convertUserIdForTable } = require('../utils/userId-converter');
+          convertedUserId = await convertUserIdForTable('configurations', userId);
+        } catch (e) {
+          console.warn(`⚠️ Não foi possível converter userId para Supabase: ${e.message}`);
+        }
+      }
+      
       const { error: supabaseError } = await db.saveChatbotConfig({
         enable_chatbot: enabled
-      });
+      }, convertedUserId);
       if (supabaseError) {
         console.error('Erro ao salvar status no Supabase:', supabaseError);
         // Continuar mesmo se falhar no Supabase
