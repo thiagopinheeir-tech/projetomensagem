@@ -30,6 +30,14 @@ BEGIN
   ) THEN
     ALTER TABLE config_ai ADD COLUMN use_premium_shears_scheduler BOOLEAN DEFAULT false;
   END IF;
+
+  -- Adicionar coluna barbearia_phone (número da barbearia para receber notificações)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'config_ai' AND column_name = 'barbearia_phone'
+  ) THEN
+    ALTER TABLE config_ai ADD COLUMN barbearia_phone TEXT;
+  END IF;
 END $$;
 
 -- Para Supabase (configurations com user_id UUID)
@@ -57,6 +65,14 @@ BEGIN
     WHERE table_schema = 'public' AND table_name = 'configurations' AND column_name = 'use_premium_shears_scheduler'
   ) THEN
     ALTER TABLE public.configurations ADD COLUMN use_premium_shears_scheduler BOOLEAN DEFAULT false;
+  END IF;
+
+  -- Adicionar coluna barbearia_phone (número da barbearia para receber notificações)
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'configurations' AND column_name = 'barbearia_phone'
+  ) THEN
+    ALTER TABLE public.configurations ADD COLUMN barbearia_phone TEXT;
   END IF;
 END $$;
 

@@ -235,7 +235,7 @@ router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
       try {
         const { data: supabaseConfig, error } = await supabase
           .from('configurations')
-          .select('premium_shears_api_url, premium_shears_api_key_encrypted, use_premium_shears_scheduler')
+          .select('premium_shears_api_url, premium_shears_api_key_encrypted, use_premium_shears_scheduler, barbearia_phone')
           .eq('user_id', userId)
           .single();
 
@@ -252,7 +252,8 @@ router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
             api_url: supabaseConfig.premium_shears_api_url || null,
             api_url_preview: apiUrlPreview,
             has_key: hasKey,
-            enabled: supabaseConfig.use_premium_shears_scheduler || false
+            enabled: supabaseConfig.use_premium_shears_scheduler || false,
+            barbearia_phone: supabaseConfig.barbearia_phone || null
           };
         }
       } catch (error) {
@@ -265,7 +266,7 @@ router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
       try {
         const convertedUserId = await convertUserIdForTable('config_ai', userId);
         const result = await query(
-          `SELECT premium_shears_api_url, premium_shears_api_key_encrypted, use_premium_shears_scheduler
+          `SELECT premium_shears_api_url, premium_shears_api_key_encrypted, use_premium_shears_scheduler, barbearia_phone
            FROM config_ai
            WHERE user_id = $1`,
           [convertedUserId]
@@ -283,14 +284,16 @@ router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
             api_url: row.premium_shears_api_url || null,
             api_url_preview: apiUrlPreview,
             has_key: !!row.premium_shears_api_key_encrypted,
-            enabled: row.use_premium_shears_scheduler || false
+            enabled: row.use_premium_shears_scheduler || false,
+            barbearia_phone: row.barbearia_phone || null
           };
         } else {
           config = {
             api_url: null,
             api_url_preview: null,
             has_key: false,
-            enabled: false
+            enabled: false,
+            barbearia_phone: null
           };
         }
       } catch (error) {
@@ -304,7 +307,8 @@ router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
         api_url: null,
         api_url_preview: null,
         has_key: false,
-        enabled: false
+        enabled: false,
+        barbearia_phone: null
       };
     }
 
@@ -321,7 +325,7 @@ router.get('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
 router.put('/scheduler', authMiddleware, requireUserId, async (req, res, next) => {
   try {
     const userId = req.userId;
-    const { api_url, api_key, enabled } = req.body;
+    const { api_url, api_key, enabled, barbearia_phone } = req.body;
 
     // Validar URL se fornecida
     if (api_url && api_url.trim()) {
@@ -351,6 +355,11 @@ router.put('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
     }
     if (enabled !== undefined) {
       updateData.use_premium_shears_scheduler = enabled === true || enabled === 'true';
+    }
+    if (barbearia_phone !== undefined) {
+      // Limpar número: remover caracteres não numéricos
+      const cleanPhone = barbearia_phone ? barbearia_phone.replace(/\D/g, '') : null;
+      updateData.barbearia_phone = cleanPhone || null;
     }
 
     // Salvar no Supabase primeiro
@@ -429,6 +438,15 @@ router.put('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
         values.push(enabled === true || enabled === 'true');
         placeholders.push(`$${paramIndex}`);
         updateFields.push(`use_premium_shears_scheduler = EXCLUDED.use_premium_shears_scheduler`);
+        paramIndex++;
+      }
+
+      if (barbearia_phone !== undefined) {
+        const cleanPhone = barbearia_phone ? barbearia_phone.replace(/\D/g, '') : null;
+        fields.push('barbearia_phone');
+        values.push(cleanPhone);
+        placeholders.push(`$${paramIndex}`);
+        updateFields.push(`barbearia_phone = EXCLUDED.barbearia_phone`);
         paramIndex++;
       }
 

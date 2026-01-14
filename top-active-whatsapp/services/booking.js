@@ -422,6 +422,23 @@ class BookingService {
           // Não falhar o agendamento se a notificação falhar
         }
 
+        // Se estiver usando Premium Shears, enviar notificação para a barbearia
+        if (schedulerType === 'premium_shears') {
+          try {
+            await appointmentNotifier.sendBarbershopNotification(userId, 'created', {
+              phone: cleanPhone,
+              client_name: state.name,
+              service: state.service || 'Agendamento',
+              start_time: new Date(slot.startISO),
+              end_time: new Date(new Date(slot.startISO).getTime() + duration * 60000),
+              notes: null
+            });
+          } catch (barbershopNotifyError) {
+            console.warn('⚠️ Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
+            // Não falhar o agendamento se a notificação falhar
+          }
+        }
+
         this.reset(cleanPhone);
         return {
           handled: true,
@@ -574,6 +591,23 @@ class BookingService {
       } catch (notifyError) {
         console.warn('⚠️ Erro ao enviar notificação WhatsApp:', notifyError.message);
         // Não falhar o agendamento se a notificação falhar
+      }
+
+      // Se estiver usando Premium Shears, enviar notificação para a barbearia
+      if (schedulerType === 'premium_shears') {
+        try {
+          await appointmentNotifier.sendBarbershopNotification(userId, 'created', {
+            phone: cleanPhone,
+            client_name: state.name,
+            service: state.service,
+            start_time: desired,
+            end_time: new Date(desired.getTime() + duration * 60000),
+            notes: null
+          });
+        } catch (barbershopNotifyError) {
+          console.warn('⚠️ Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
+          // Não falhar o agendamento se a notificação falhar
+        }
       }
       
       const when = formatHuman(desired);
@@ -935,6 +969,23 @@ class BookingService {
           console.warn('⚠️ [createAppointmentFromAI] Erro ao enviar notificação WhatsApp:', notifyError.message);
           // Não falhar o agendamento se a notificação falhar
         }
+
+        // Se estiver usando Premium Shears, enviar notificação para a barbearia
+        if (schedulerType === 'premium_shears') {
+          try {
+            await appointmentNotifier.sendBarbershopNotification(userId, 'created', {
+              phone: cleanPhone,
+              client_name: clientName,
+              service: service,
+              start_time: finalStartTime,
+              end_time: finalEndTime,
+              notes: notes || null
+            });
+          } catch (barbershopNotifyError) {
+            console.warn('⚠️ [createAppointmentFromAI] Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
+            // Não falhar o agendamento se a notificação falhar
+          }
+        }
         
         console.log(`✅ [createAppointmentFromAI] Agendamento salvo no banco de dados`, {
           savedWithEventId: !!eventIdToSave,
@@ -1186,6 +1237,29 @@ class BookingService {
       } catch (dbError) {
         console.error('❌ [handleCancelAppointment] Erro ao atualizar no banco:', dbError);
         throw dbError;
+      }
+
+      // Se estiver usando Premium Shears, enviar notificação para a barbearia
+      const appointmentResult = await query(
+        `SELECT scheduler_type FROM booking_appointments WHERE id = $1`,
+        [appointmentId]
+      );
+      const schedulerType = appointmentResult.rows[0]?.scheduler_type || 'google_calendar';
+      
+      if (schedulerType === 'premium_shears') {
+        try {
+          await appointmentNotifier.sendBarbershopNotification(userId, 'cancelled', {
+            phone: appointment.phone,
+            client_name: appointment.client_name,
+            service: appointment.service,
+            start_time: appointment.start_time,
+            end_time: appointment.end_time,
+            notes: null
+          });
+        } catch (barbershopNotifyError) {
+          console.warn('⚠️ [handleCancelAppointment] Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
+          // Não falhar o cancelamento se a notificação falhar
+        }
       }
 
       const start = new Date(appointment.start_time);
