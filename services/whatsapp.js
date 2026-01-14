@@ -201,6 +201,9 @@ class WhatsAppService {
 
     // Inicializar chatbot com configuração padrão + config do banco
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:185',message:'Criando AIChatbot com API key',data:{hasApiKey:!!openaiApiKey,apiKeyLength:openaiApiKey?.length,apiKeyPreview:openaiApiKey ? `${openaiApiKey.substring(0,7)}...${openaiApiKey.substring(openaiApiKey.length-4)}` : 'null'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       this.chatbot = new AIChatbot({
         openaiApiKey: openaiApiKey, // Passar API key específica do usuário
         businessName: process.env.BUSINESS_NAME || 'JP Financeira',
@@ -932,9 +935,13 @@ class WhatsAppService {
         console.log(`🤖 [${phone}] Gerando resposta da IA...`);
         console.log(`   - Mensagem do usuário: ${userMessage.substring(0, 100)}`);
         console.log(`   - Histórico: ${history.length} mensagens`);
-        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:862',message:'Chamando generateResponse',data:{userMessage:userMessage.substring(0,50),historyLength:history.length,apiProvider:this.chatbot?.apiProvider,hasOpenai:!!this.chatbot?.openai},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
         const aiResponse = await this.chatbot.generateResponse(userMessage, history);
-        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:865',message:'Resposta recebida de generateResponse',data:{responseLength:aiResponse?.length,responsePreview:aiResponse?.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
         console.log(`🤖 [${phone}] Resposta gerada: ${aiResponse.substring(0, 100)}`);
 
         // 🚀 Verificar se a IA coletou informações de agendamento e criar evento

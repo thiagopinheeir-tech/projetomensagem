@@ -38,6 +38,9 @@ class AIChatbot {
 
     // Usar API key do config (do usuário) ou fallback para variável de ambiente
     const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ai-chatbot.js:40',message:'AIChatbot constructor - verificando API key',data:{hasConfigKey:!!config.openaiApiKey,hasEnvKey:!!process.env.OPENAI_API_KEY,hasFinalKey:!!openaiApiKey,keyLength:openaiApiKey?.length,keyType:typeof openaiApiKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
 
     // Inicializar OpenAI (se configurado)
     if (openaiApiKey) {
@@ -47,14 +50,26 @@ class AIChatbot {
         });
         this.apiProvider = 'openai';
         console.log('✅ OpenAI API configurado' + (config.openaiApiKey ? ' (API key do usuário)' : ' (variável de ambiente)'));
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ai-chatbot.js:48',message:'OpenAI inicializado com sucesso',data:{apiProvider:this.apiProvider,hasOpenai:!!this.openai},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
       } catch (error) {
         console.error('❌ Erro ao inicializar OpenAI:', error.message);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ai-chatbot.js:51',message:'Erro ao inicializar OpenAI',data:{error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
       }
     }
 
     if (this.apiProvider === 'none') {
-      console.warn('⚠️ Nenhuma API de IA configurada. Chatbot IA não funcionará.');
-      console.warn('💡 Configure openaiApiKey no config ou OPENAI_API_KEY no ambiente');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ai-chatbot.js:55',message:'apiProvider é none',data:{hasConfigKey:!!config.openaiApiKey,hasEnvKey:!!process.env.OPENAI_API_KEY,hasFinalKey:!!openaiApiKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+      // Não mostrar aviso se a API key foi passada mas está vazia/null (pode ser carregada depois)
+      if (!config.openaiApiKey && !process.env.OPENAI_API_KEY) {
+        console.warn('⚠️ Nenhuma API de IA configurada. Chatbot IA não funcionará.');
+        console.warn('💡 Configure openaiApiKey no config ou OPENAI_API_KEY no ambiente');
+      }
     }
   }
 
