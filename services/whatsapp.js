@@ -222,6 +222,9 @@ class WhatsAppService {
 
       // Habilitar se tiver API key
       this.chatbotEnabled = !!openaiApiKey;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:195',message:'Chatbot habilitado após inicialização',data:{chatbotEnabled:this.chatbotEnabled,hasApiKey:!!openaiApiKey,apiProvider:this.chatbot?.apiProvider,hasOpenai:!!this.chatbot?.openai},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
 
       // Tentar carregar configuração salva do banco (filtrada por userId se fornecido)
       try {
@@ -890,8 +893,14 @@ class WhatsAppService {
         }
 
         // Gerar resposta com IA (apenas se chatbot estiver habilitado)
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:822',message:'Verificando chatbot antes de gerar resposta',data:{hasChatbot:!!this.chatbot,chatbotEnabled:this.chatbotEnabled,apiProvider:this.chatbot?.apiProvider,hasOpenai:!!this.chatbot?.openai,userMessage:userMessage.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+        // #endregion
         if (!this.chatbot || !this.chatbotEnabled) {
           console.log(`⚠️ Chatbot desabilitado ou não inicializado. Mensagem de ${phone} não será processada pela IA.`);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.js:825',message:'Chatbot desabilitado - usando fallback',data:{hasChatbot:!!this.chatbot,chatbotEnabled:this.chatbotEnabled},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+          // #endregion
           // Se chatbot não está disponível, usar fallback
           let responseText;
           if (this.chatbot) {

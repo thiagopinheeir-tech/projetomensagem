@@ -477,6 +477,9 @@ class BookingService {
     }
 
     let isFree = false;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'booking.js:479',message:'Verificando disponibilidade do slot',data:{userId,startISO:desired.toISOString(),durationMinutes:duration},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     try {
       const calendarService = await this.getSchedulerService(userId);
       isFree = await calendarService.isSlotFree({ 
@@ -485,6 +488,9 @@ class BookingService {
         durationMinutes: duration,
         intervalMinutes: state.profileConfig?.intervalBetweenAppointmentsMinutes || 0
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'booking.js:487',message:'Resultado da verificação de disponibilidade',data:{isFree,userId,startISO:desired.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
     } catch (e) {
       // Caso comum: Premium Shears não configurado
       return {
@@ -545,6 +551,9 @@ class BookingService {
     // sugerir 3 opções do dia
     const { start, end } = getOpenClose(state.dateOnly);
     let slots = [];
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'booking.js:546',message:'Buscando horários disponíveis',data:{userId,fromISO:start.toISOString(),toISO:end.toISOString(),durationMinutes:duration},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
     try {
       const calendarService = await this.getSchedulerService(userId);
       slots = await calendarService.getAvailableSlots({
@@ -554,6 +563,9 @@ class BookingService {
         durationMinutes: duration,
         intervalMinutes: state.profileConfig?.intervalBetweenAppointmentsMinutes || 0
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'booking.js:556',message:'Horários disponíveis recebidos',data:{slotsCount:slots.length,slots:slots.slice(0,3).map(s=>({startISO:s.startISO,startLocal:s.startLocal}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
     } catch (e) {
       return {
         handled: true,
