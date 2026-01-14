@@ -38,6 +38,7 @@ export const useAuth = () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       // Registrando usuário...
+      console.log('📝 Registrando usuário:', {
         apiUrl,
         endpoint: `${apiUrl}/api/auth/register`,
         email: email?.substring(0, 20)
