@@ -367,39 +367,53 @@ router.put('/scheduler', authMiddleware, requireUserId, async (req, res, next) =
     // Salvar no Supabase primeiro
     if (isConfigured) {
       try {
-        // Verificar se já existe configuração
-        const { data: existing } = await supabase
-          .from('configurations')
-          .select('id')
-          .eq('user_id', userId)
-          .single();
+        // Garantir que estamos usando service key (bypass RLS)
+        const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+        const supabaseUrl = process.env.SUPABASE_URL;
+        
+        if (serviceKey && supabaseUrl) {
+          const { createClient } = require('@supabase/supabase-js');
+          const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false
+            }
+          });
 
-        if (existing) {
-          const { error: updateError } = await supabase
+          // Verificar se já existe configuração
+          const { data: existing } = await supabaseAdmin
             .from('configurations')
-            .update({
-              ...updateData,
-              updated_at: new Date().toISOString()
-            })
-            .eq('user_id', userId);
+            .select('id')
+            .eq('user_id', userId)
+            .single();
 
-          if (updateError) {
-            console.error('❌ [PUT /config/scheduler] Erro ao atualizar no Supabase:', updateError);
-          } else {
-            console.log('✅ [PUT /config/scheduler] Configuração atualizada no Supabase');
-          }
-        } else {
-          const { error: insertError } = await supabase
-            .from('configurations')
-            .insert([{
-              user_id: userId,
-              ...updateData
-            }]);
+          if (existing) {
+            const { error: updateError } = await supabaseAdmin
+              .from('configurations')
+              .update({
+                ...updateData,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', userId);
 
-          if (insertError) {
-            console.error('❌ [PUT /config/scheduler] Erro ao inserir no Supabase:', insertError);
+            if (updateError) {
+              console.error('❌ [PUT /config/scheduler] Erro ao atualizar no Supabase:', updateError);
+            } else {
+              console.log('✅ [PUT /config/scheduler] Configuração atualizada no Supabase');
+            }
           } else {
-            console.log('✅ [PUT /config/scheduler] Configuração inserida no Supabase');
+            const { error: insertError } = await supabaseAdmin
+              .from('configurations')
+              .insert([{
+                user_id: userId,
+                ...updateData
+              }]);
+
+            if (insertError) {
+              console.error('❌ [PUT /config/scheduler] Erro ao inserir no Supabase:', insertError);
+            } else {
+              console.log('✅ [PUT /config/scheduler] Configuração inserida no Supabase');
+            }
           }
         }
       } catch (error) {
