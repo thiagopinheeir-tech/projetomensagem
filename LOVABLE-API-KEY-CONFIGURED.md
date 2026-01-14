@@ -21,7 +21,7 @@ Quando um usuário configurar o Premium Shears Scheduler no nosso frontend:
 
 **Em "Chaves e Integrações" → "Sistema de Agendamento":**
 
-- **URL da API:** `[URL base fornecida pelo Lovable]`
+- **URL da API:** `https://hpjqsbmcotrljlknvbrr.supabase.co/functions/v1/api`
 - **API Key:** `ps_test_key_123456` ← **Usar esta chave**
 
 ### 2. **Como Funciona**
