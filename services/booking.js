@@ -44,6 +44,42 @@ async function getSchedulerService(userId) {
   }
 }
 
+// Cache de configuração do scheduler para evitar múltiplas queries
+const schedulerConfigCache = new Map();
+const SCHEDULER_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * Busca configuração do scheduler e retorna o serviço correto
+ */
+async function getSchedulerService(userId) {
+  if (!userId) {
+    return googleCalendarOAuth; // Fallback para Google Calendar
+  }
+
+  // Verificar cache
+  const cacheKey = String(userId);
+  const cached = schedulerConfigCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < SCHEDULER_CACHE_TTL) {
+    return cached.service;
+  }
+
+  try {
+    const isConfigured = await premiumShearsScheduler.isConfiguredForUser(userId);
+    const service = isConfigured ? premiumShearsScheduler : googleCalendarOAuth;
+    
+    // Atualizar cache
+    schedulerConfigCache.set(cacheKey, {
+      service,
+      timestamp: Date.now()
+    });
+
+    return service;
+  } catch (error) {
+    console.warn('⚠️ [getSchedulerService] Erro ao verificar configuração, usando Google Calendar:', error.message);
+    return googleCalendarOAuth; // Fallback para Google Calendar
+  }
+}
+
 function norm(s) {
   return String(s || '').trim();
 }
@@ -881,7 +917,7 @@ class BookingService {
       try {
         const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
         const duplicateCheck = await query(
-          `SELECT id, google_calendar_event_id, start_time, status
+          `SELECT id, google_calendar_event_id, external_event_id, scheduler_type, start_time, status
            FROM booking_appointments
            WHERE user_id = $1 
              AND phone = $2 
@@ -894,19 +930,23 @@ class BookingService {
 
         if (duplicateCheck.rows.length > 0) {
           const duplicate = duplicateCheck.rows[0];
+          const duplicateEventId = duplicate.external_event_id || duplicate.google_calendar_event_id;
+          const duplicateSchedulerType = duplicate.scheduler_type || 'google_calendar';
+          
           console.log(`⚠️ [createAppointmentFromAI] Agendamento duplicado detectado:`, {
             duplicateId: duplicate.id,
-            existingEventId: duplicate.google_calendar_event_id?.substring(0, 30),
+            existingEventId: duplicateEventId?.substring(0, 30),
+            schedulerType: duplicateSchedulerType,
             existingTime: new Date(duplicate.start_time).toLocaleString('pt-BR'),
             newTime: finalStartTime.toLocaleString('pt-BR')
           });
 
           // Se o novo agendamento foi criado, cancelar o anterior no sistema de agendamento
-          if (appt && appt.eventId && (duplicate.google_calendar_event_id || duplicate.external_event_id)) {
+          if (appt && appt.eventId && duplicateEventId) {
             try {
-              const eventIdToDelete = duplicate.external_event_id || duplicate.google_calendar_event_id;
-              await calendarService.deleteAppointment({ userId, eventId: eventIdToDelete });
-              console.log(`✅ [createAppointmentFromAI] Agendamento anterior cancelado no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}`);
+              const serviceToUse = duplicateSchedulerType === 'premium_shears' ? premiumShearsScheduler : googleCalendarOAuth;
+              await serviceToUse.deleteAppointment({ userId, eventId: duplicateEventId });
+              console.log(`✅ [createAppointmentFromAI] Agendamento anterior cancelado no ${duplicateSchedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}`);
             } catch (delError) {
               console.warn(`⚠️ [createAppointmentFromAI] Erro ao cancelar agendamento anterior:`, delError.message);
             }
@@ -1132,7 +1172,7 @@ class BookingService {
 
       // Buscar agendamentos futuros primeiro
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id
+        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id, external_event_id, scheduler_type
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW() AND status = 'confirmed'
          ORDER BY start_time ASC
@@ -1191,22 +1231,26 @@ class BookingService {
       // Cancelar o agendamento selecionado
       const appointment = result.rows[appointmentIndex];
       const appointmentId = appointment.id;
-      const eventId = appointment.google_calendar_event_id;
+      const eventId = appointment.google_calendar_event_id || appointment.external_event_id;
+      const schedulerType = appointment.scheduler_type || 'google_calendar';
 
       console.log(`🗑️ [handleCancelAppointment] Cancelando agendamento:`, {
         appointmentId,
         eventId: eventId?.substring(0, 50),
+        schedulerType,
         service: appointment.service
       });
 
-      // Deletar do Google Calendar se tiver eventId
+      // Deletar do sistema de agendamento se tiver eventId
       if (eventId) {
         try {
-          await googleCalendarOAuth.deleteAppointment({ userId, eventId });
-          console.log(`✅ [handleCancelAppointment] Evento deletado do Google Calendar`);
+          // Determinar qual serviço usar baseado no scheduler_type
+          const serviceToUse = schedulerType === 'premium_shears' ? premiumShearsScheduler : googleCalendarOAuth;
+          await serviceToUse.deleteAppointment({ userId, eventId });
+          console.log(`✅ [handleCancelAppointment] Evento deletado do ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}`);
         } catch (calendarError) {
-          console.error('⚠️ [handleCancelAppointment] Erro ao deletar do Google Calendar:', calendarError.message);
-          // Continuar mesmo se falhar no Google Calendar
+          console.error(`⚠️ [handleCancelAppointment] Erro ao deletar do ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}:`, calendarError.message);
+          // Continuar mesmo se falhar
         }
       }
 
@@ -1225,12 +1269,7 @@ class BookingService {
       }
 
       // Se estiver usando Premium Shears, enviar notificação para a barbearia
-      const appointmentResult = await query(
-        `SELECT scheduler_type FROM booking_appointments WHERE id = $1`,
-        [appointmentId]
-      );
-      const schedulerType = appointmentResult.rows[0]?.scheduler_type || 'google_calendar';
-      
+      // schedulerType já foi buscado acima junto com os dados do agendamento
       if (schedulerType === 'premium_shears') {
         try {
           await appointmentNotifier.sendBarbershopNotification(userId, 'cancelled', {
@@ -1283,7 +1322,7 @@ class BookingService {
 
       // Buscar agendamentos futuros
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id
+        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id, external_event_id, scheduler_type
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW() AND status = 'confirmed'
          ORDER BY start_time ASC
