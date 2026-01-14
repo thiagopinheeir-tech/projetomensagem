@@ -38,7 +38,8 @@ const APIManager = () => {
     api_key: '',
     enabled: false,
     api_url_preview: null,
-    has_key: false
+    has_key: false,
+    barbearia_phone: ''
   });
   const [showPremiumShearsKey, setShowPremiumShearsKey] = useState(false);
   const [loadingScheduler, setLoadingScheduler] = useState(false);
@@ -273,7 +274,8 @@ const APIManager = () => {
           api_key: '',
           enabled: cfg.enabled || false,
           api_url_preview: cfg.api_url_preview || null,
-          has_key: cfg.has_key || false
+          has_key: cfg.has_key || false,
+          barbearia_phone: cfg.barbearia_phone || ''
         });
       }
     } catch (error) {
@@ -290,7 +292,8 @@ const APIManager = () => {
       const payload = {
         api_url: premiumShearsConfig.api_url?.trim() || null,
         api_key: premiumShearsConfig.api_key?.trim() || null,
-        enabled: premiumShearsConfig.enabled
+        enabled: premiumShearsConfig.enabled,
+        barbearia_phone: premiumShearsConfig.barbearia_phone?.trim() || null
       };
 
       const response = await api.put('/api/config/scheduler', payload);
@@ -664,6 +667,22 @@ const APIManager = () => {
               </p>
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
                 Configure esta URL no seu sistema de agendamento para receber notificações quando agendamentos forem criados
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Número da Barbearia para Notificações
+              </label>
+              <Input
+                type="text"
+                value={premiumShearsConfig.barbearia_phone}
+                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, barbearia_phone: e.target.value.replace(/\D/g, '')})}
+                placeholder="5511999999999 (apenas números com código do país)"
+                icon={Calendar}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número WhatsApp que receberá notificações quando agendamentos forem criados, cancelados ou modificados. Use apenas números com código do país (ex: 5511999999999)
               </p>
             </div>
 
