@@ -115,18 +115,45 @@ async function apiRequest(userId, method, endpoint, body = null) {
 
   try {
     console.log(`📡 [apiRequest] ${method} ${url}`);
+    console.log(`📡 [apiRequest] Headers:`, { ...headers, Authorization: headers.Authorization ? 'Bearer ***' : 'não fornecido' });
+    if (body) {
+      console.log(`📡 [apiRequest] Body:`, JSON.stringify(body).substring(0, 200));
+    }
+    
     const response = await fetch(url, options);
-    const data = await response.json();
+    
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      const text = await response.text();
+      console.error(`❌ [apiRequest] Erro ao parsear JSON:`, {
+        status: response.status,
+        statusText: response.statusText,
+        body: text.substring(0, 500)
+      });
+      throw new Error(`Resposta inválida da API: ${text.substring(0, 200)}`);
+    }
 
     if (!response.ok) {
+      console.error(`❌ [apiRequest] Erro na resposta:`, {
+        status: response.status,
+        statusText: response.statusText,
+        data: JSON.stringify(data).substring(0, 300)
+      });
       const error = new Error(data.message || data.error || `HTTP ${response.status}`);
       error.statusCode = response.status;
       throw error;
     }
 
+    console.log(`✅ [apiRequest] Resposta OK:`, JSON.stringify(data).substring(0, 300));
     return data;
   } catch (error) {
-    console.error(`❌ [apiRequest] Erro na requisição:`, error.message);
+    console.error(`❌ [apiRequest] Erro na requisição:`, {
+      message: error.message,
+      statusCode: error.statusCode,
+      url
+    });
     if (error.statusCode) {
       throw error;
     }
@@ -216,6 +243,13 @@ module.exports = {
       throw err;
     }
 
+    console.log(`🔍 [PremiumShears] Verificando disponibilidade:`, {
+      userId,
+      startISO,
+      durationMinutes,
+      intervalMinutes
+    });
+
     const params = new URLSearchParams({
       startTime: startISO,
       durationMinutes: String(durationMinutes)
@@ -225,9 +259,34 @@ module.exports = {
       params.append('intervalMinutes', String(intervalMinutes));
     }
 
-    const response = await apiRequest(userId, 'GET', `/appointments/check-availability?${params.toString()}`);
+    try {
+      const response = await apiRequest(userId, 'GET', `/appointments/check-availability?${params.toString()}`);
+      
+      console.log(`📊 [PremiumShears] Resposta da verificação:`, {
+        available: response.available,
+        response: JSON.stringify(response).substring(0, 200)
+      });
 
-    return response.available === true;
+      const isAvailable = response.available === true;
+      console.log(`✅ [PremiumShears] Slot ${isAvailable ? 'DISPONÍVEL' : 'INDISPONÍVEL'}`);
+      
+      return isAvailable;
+    } catch (error) {
+      console.error('❌ [PremiumShears] Erro ao verificar disponibilidade:', {
+        error: error.message,
+        startISO,
+        durationMinutes
+      });
+      
+      // Se o erro for "não configurado", retornar false
+      if (error.message.includes('não configurado')) {
+        return false;
+      }
+      
+      // Para outros erros, assumir disponível para não bloquear agendamentos
+      console.warn('⚠️ [PremiumShears] Assumindo slot disponível devido a erro');
+      return true;
+    }
   },
 
   /**
