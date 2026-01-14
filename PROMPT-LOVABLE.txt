@@ -1,0 +1,253 @@
+PRECISO QUE VOCÊ IMPLEMENTE UMA API REST COMPLETA NO PROJETO PREMIUM SHEARS SCHEDULER PARA INTEGRAR COM NOSSO SISTEMA DE WHATSAPP.
+
+## CONTEXTO:
+O sistema Premium Shears será usado para gerenciar agendamentos de uma barbearia. Nosso sistema de WhatsApp precisa:
+1. Criar agendamentos automaticamente quando clientes agendarem via WhatsApp
+2. Verificar horários disponíveis para sugerir opções aos clientes  
+3. Receber notificações quando agendamentos forem criados diretamente no Premium Shears
+4. Cancelar agendamentos quando necessário
+
+## AUTENTICAÇÃO:
+- Suportar autenticação via API Key (Bearer Token) no header Authorization
+- API Key é OPCIONAL - alguns usuários podem não usar
+- Se não houver API Key, ainda deve funcionar
+
+## ENDPOINTS NECESSÁRIOS:
+
+### 1. POST /api/appointments
+Cria um novo agendamento.
+
+REQUEST BODY:
+{
+  "clientName": "João Silva",
+  "phone": "5511999999999",
+  "service": "Corte + Barba",
+  "startTime": "2026-01-15T14:30:00.000Z",
+  "endTime": "2026-01-15T15:00:00.000Z",
+  "notes": "Cliente prefere corte curto" (opcional)
+}
+
+VALIDAÇÕES:
+- phone, service, startTime, endTime, clientName são OBRIGATÓRIOS
+- Verificar se horário está disponível (não conflita com outros agendamentos)
+- Verificar horário de funcionamento (ex: 9h-20h)
+- endTime deve ser após startTime
+
+RESPONSE SUCESSO (201):
+{
+  "success": true,
+  "appointmentId": "abc123-def456",
+  "appointment": {
+    "id": "abc123-def456",
+    "clientName": "João Silva",
+    "phone": "5511999999999",
+    "service": "Corte + Barba",
+    "startTime": "2026-01-15T14:30:00.000Z",
+    "endTime": "2026-01-15T15:00:00.000Z",
+    "status": "confirmed",
+    "notes": "Cliente prefere corte curto"
+  }
+}
+
+RESPONSE ERRO (409 - horário ocupado):
+{
+  "success": false,
+  "error": "Horário indisponível - já existe um agendamento neste período",
+  "code": "SLOT_OCCUPIED"
+}
+
+### 2. GET /api/appointments/available-slots
+Lista todos os horários disponíveis em um período.
+
+QUERY PARAMS:
+- from: ISO 8601 datetime (obrigatório)
+- to: ISO 8601 datetime (obrigatório)
+- durationMinutes: número (obrigatório)
+- intervalMinutes: número (opcional)
+
+EXEMPLO:
+GET /api/appointments/available-slots?from=2026-01-15T09:00:00.000Z&to=2026-01-15T20:00:00.000Z&durationMinutes=30&intervalMinutes=15
+
+RESPONSE (200):
+{
+  "success": true,
+  "slots": [
+    {
+      "startISO": "2026-01-15T09:00:00.000Z",
+      "startLocal": "15/01/2026 09:00"
+    },
+    {
+      "startISO": "2026-01-15T09:30:00.000Z",
+      "startLocal": "15/01/2026 09:30"
+    }
+  ]
+}
+
+LÓGICA:
+- Considerar horário de funcionamento (9h-20h)
+- Excluir horários já ocupados
+- Considerar intervalo entre agendamentos
+- Retornar ordenado cronologicamente
+
+### 3. GET /api/appointments/check-availability
+Verifica se um horário específico está disponível.
+
+QUERY PARAMS:
+- startTime: ISO 8601 datetime (obrigatório)
+- durationMinutes: número (obrigatório)
+- intervalMinutes: número (opcional)
+
+EXEMPLO:
+GET /api/appointments/check-availability?startTime=2026-01-15T14:30:00.000Z&durationMinutes=30
+
+RESPONSE DISPONÍVEL (200):
+{
+  "success": true,
+  "available": true,
+  "message": "Horário disponível"
+}
+
+RESPONSE INDISPONÍVEL (200):
+{
+  "success": true,
+  "available": false,
+  "message": "Horário ocupado ou fora do horário de funcionamento"
+}
+
+### 4. DELETE /api/appointments/:id
+Cancela/deleta um agendamento.
+
+RESPONSE SUCESSO (200):
+{
+  "success": true,
+  "message": "Agendamento cancelado com sucesso",
+  "appointmentId": "abc123-def456"
+}
+
+RESPONSE ERRO (404):
+{
+  "success": false,
+  "error": "Agendamento não encontrado"
+}
+
+## WEBHOOK - NOTIFICAR NOSSO SISTEMA:
+
+QUANDO CHAMAR:
+Quando um agendamento for criado DIRETAMENTE no Premium Shears (via interface web/app), você DEVE chamar nosso webhook.
+
+URL DO WEBHOOK:
+https://projetomensagem-production.up.railway.app/api/webhooks/premium-shears/appointment-created
+
+NÃO CHAMAR quando o agendamento vier da nossa API (evitar duplicação).
+
+PAYLOAD PARA ENVIAR:
+POST https://projetomensagem-production.up.railway.app/api/webhooks/premium-shears/appointment-created
+Content-Type: application/json
+
+{
+  "appointmentId": "abc123-def456",
+  "clientName": "Maria Santos",
+  "phone": "5511888888888",
+  "service": "Corte",
+  "startTime": "2026-01-16T10:00:00.000Z",
+  "endTime": "2026-01-16T10:30:00.000Z",
+  "userId": "user-uuid-or-id",  // IMPORTANTE: ID do usuário que criou o agendamento
+  "notes": "Primeira vez" (opcional)
+}
+
+COMO OBTER userId:
+- Opção 1: Armazenar userId quando nosso sistema criar agendamento via API
+- Opção 2: Tabela de mapeamento usuário Premium Shears → userId nosso sistema
+- Opção 3: Incluir userId no contexto/autenticação
+
+TRATAMENTO DE ERROS:
+- Se webhook falhar, fazer retry (3 tentativas com 5 segundos de intervalo)
+- Não bloquear criação do agendamento se webhook falhar
+- Logar erros para depuração
+
+## FORMATOS IMPORTANTES:
+
+- DATAS: Sempre ISO 8601 (ex: "2026-01-15T14:30:00.000Z")
+- TELEFONE: Apenas números com código do país (ex: "5511999999999")
+- STATUS HTTP: 200 (sucesso), 201 (criado), 400 (erro validação), 409 (conflito/horário ocupado), 404 (não encontrado), 500 (erro servidor)
+
+## EXEMPLO DE IMPLEMENTAÇÃO:
+
+```javascript
+// POST /api/appointments
+router.post('/api/appointments', async (req, res) => {
+  const { clientName, phone, service, startTime, endTime, notes } = req.body;
+  
+  // Validações
+  if (!phone || !service || !startTime || !endTime || !clientName) {
+    return res.status(400).json({
+      success: false,
+      error: 'Campos obrigatórios: phone, service, startTime, endTime, clientName'
+    });
+  }
+
+  // Verificar disponibilidade
+  const isAvailable = await checkAvailability(startTime, endTime);
+  if (!isAvailable) {
+    return res.status(409).json({
+      success: false,
+      error: 'Horário indisponível',
+      code: 'SLOT_OCCUPIED'
+    });
+  }
+
+  // Criar agendamento
+  const appointmentId = await createAppointment({ clientName, phone, service, startTime, endTime, notes });
+
+  res.status(201).json({
+    success: true,
+    appointmentId,
+    appointment: { id: appointmentId, clientName, phone, service, startTime, endTime, status: 'confirmed', notes }
+  });
+});
+
+// Função para chamar webhook quando agendamento for criado via UI
+async function notifyWhatsAppSystem(appointmentData, userId) {
+  const webhookUrl = 'https://projetomensagem-production.up.railway.app/api/webhooks/premium-shears/appointment-created';
+  
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appointmentId: appointmentData.id,
+        clientName: appointmentData.clientName,
+        phone: appointmentData.phone,
+        service: appointmentData.service,
+        startTime: appointmentData.startTime,
+        endTime: appointmentData.endTime,
+        userId: userId, // CRÍTICO: incluir userId
+        notes: appointmentData.notes || null
+      })
+    });
+  } catch (error) {
+    console.error('Erro ao chamar webhook:', error);
+    // Não bloquear criação se webhook falhar
+  }
+}
+```
+
+## CHECKLIST:
+
+- [ ] POST /api/appointments - criar agendamento com validações
+- [ ] GET /api/appointments/available-slots - listar slots disponíveis
+- [ ] GET /api/appointments/check-availability - verificar disponibilidade
+- [ ] DELETE /api/appointments/:id - cancelar agendamento
+- [ ] Webhook: chamar nosso sistema quando agendamento for criado via UI (INCLUIR userId)
+- [ ] Validações: horário ocupado, horário funcionamento, formato dados
+- [ ] Tratamento de erros consistente
+- [ ] Autenticação opcional via API Key
+
+## IMPORTANTE:
+
+1. userId é CRÍTICO no webhook - sem ele nosso sistema não consegue isolar dados por usuário
+2. Chamar webhook APENAS quando agendamento for criado via UI Premium Shears, NÃO quando vier da nossa API
+3. Horário funcionamento: considerar 9h-20h (ajustar conforme necessário)
+4. Sempre validar conflitos de horário antes de criar agendamento
+
+IMPLEMENTE TODOS OS 4 ENDPOINTS E O WEBHOOK CONFORME ESPECIFICADO ACIMA.
