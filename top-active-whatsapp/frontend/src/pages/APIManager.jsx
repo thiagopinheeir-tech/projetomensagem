@@ -1,41 +1,29 @@
 import { useState, useEffect } from 'react';
-import { Key, Save, AlertCircle, Eye, EyeOff, RefreshCw, Calendar, XCircle } from 'lucide-react';
+import { Key, Save, AlertCircle, Eye, EyeOff, RefreshCw, BookOpen } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import SetupWizard from '../components/SetupWizard';
 import api from '../lib/axios';
 import toast from 'react-hot-toast';
 
 const APIManager = () => {
   const [loading, setLoading] = useState(true);
-  const [savingOpenAI, setSavingOpenAI] = useState(false);
-  const [savingScheduler, setSavingScheduler] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [config, setConfig] = useState({
     openai_key: '',
     model: 'gpt-4o-mini',
     temperature: 0.7,
     max_tokens: 300,
+    // Prompt do chatbot é gerenciado por Perfil/ChatbotSettings.
   });
   const [keyPreview, setKeyPreview] = useState('');
 
-  
-  const [premiumShearsConfig, setPremiumShearsConfig] = useState({
-    api_url: '',
-    api_key: '',
-    enabled: false,
-    api_url_preview: null,
-    has_key: false,
-    barbearia_phone: ''
-  });
-  const [showPremiumShearsKey, setShowPremiumShearsKey] = useState(false);
-  const [loadingScheduler, setLoadingScheduler] = useState(false);
-
   useEffect(() => {
-    (async () => {
-      await Promise.allSettled([loadConfig(), loadSchedulerConfig()]);
-    })();
+    loadConfig();
   }, []);
 
   const loadConfig = async () => {
@@ -61,61 +49,9 @@ const APIManager = () => {
     }
   };
 
-
-
-  const loadSchedulerConfig = async () => {
-    try {
-      setLoadingScheduler(true);
-      const response = await api.get('/api/config/scheduler');
-
-      if (response.data.success) {
-        const cfg = response.data.config;
-        setPremiumShearsConfig({
-          api_url: cfg.api_url || '',
-          api_key: '',
-          enabled: cfg.enabled || false,
-          api_url_preview: cfg.api_url_preview || null,
-          has_key: cfg.has_key || false,
-          barbearia_phone: cfg.barbearia_phone || ''
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao carregar configuração do scheduler:', error);
-      toast.error('Erro ao carregar configuração do scheduler');
-    } finally {
-      setLoadingScheduler(false);
-    }
-  };
-
-  const handleSaveScheduler = async () => {
-    try {
-      setSavingScheduler(true);
-      const payload = {
-        api_url: premiumShearsConfig.api_url?.trim() || null,
-        api_key: premiumShearsConfig.api_key?.trim() || null,
-        enabled: premiumShearsConfig.enabled,
-        barbearia_phone: premiumShearsConfig.barbearia_phone?.trim() || null
-      };
-
-      const response = await api.put('/api/config/scheduler', payload);
-
-      if (response.data.success) {
-        toast.success('Configuração do scheduler salva com sucesso!');
-        setPremiumShearsConfig(prev => ({ ...prev, api_key: '' }));
-        setTimeout(loadSchedulerConfig, 1000);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Erro ao salvar configuração do scheduler');
-      console.error(error);
-    } finally {
-      setSavingScheduler(false);
-    }
-  };
-
-
-  const handleSaveOpenAI = async (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    setSavingOpenAI(true);
+    setSaving(true);
 
     try {
       const payload = {
@@ -133,15 +69,13 @@ const APIManager = () => {
         setConfig(prev => ({ ...prev, openai_key: '' }));
         
         // Recarregar para atualizar preview
-        setTimeout(async () => {
-          await loadConfig();
-        }, 1000);
+        setTimeout(loadConfig, 1000);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao salvar configuração');
       console.error(error);
     } finally {
-      setSavingOpenAI(false);
+      setSaving(false);
     }
   };
 
@@ -171,18 +105,29 @@ const APIManager = () => {
           </p>
         </div>
 
-        <Button
-          variant="secondary"
-          onClick={() => {
-            loadConfig();
-            loadSchedulerConfig();
-          }}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw size={20} />
-          Recarregar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            onClick={() => setShowWizard(true)}
+            className="flex items-center gap-2"
+          >
+            <BookOpen size={18} />
+            Guia de Configuração
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={loadConfig}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw size={20} />
+            Recarregar
+          </Button>
+        </div>
       </div>
+
+      {showWizard && (
+        <SetupWizard onClose={() => setShowWizard(false)} />
+      )}
 
       {/* Alert */}
       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-3">
@@ -198,11 +143,10 @@ const APIManager = () => {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <form onSubmit={handleSave} className="space-y-6">
         {/* Card OpenAI */}
         <Card title="OpenAI" icon={Key}>
-          <form onSubmit={handleSaveOpenAI}>
-            <div className="space-y-4">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 OpenAI API Key
@@ -251,7 +195,7 @@ const APIManager = () => {
                   className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                   <option value="gpt-4o-mini">GPT-4o Mini (Rápido e Econômico)</option>
-                  <option value="gpt-4o">GPT-4o (Mais Poderoso)</option>
+                  <option value="gpt-4o">GPT-4o (Mais Capaz)</option>
                   <option value="gpt-4-turbo">GPT-4 Turbo</option>
                   <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
                 </select>
@@ -259,7 +203,7 @@ const APIManager = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Temperatura ({config.temperature.toFixed(1)})
+                  Temperatura ({config.temperature})
                 </label>
                 <input
                   type="range"
@@ -268,165 +212,51 @@ const APIManager = () => {
                   step="0.1"
                   value={config.temperature}
                   onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  className="w-full"
                 />
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  <span>0 = Focado e Determinístico</span>
-                  <span>1 = Criativo e Variado</span>
-                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  0 = Focado e Determinístico | 1 = Criativo e Variado
+                </p>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Máximo de Tokens
-              </label>
               <Input
+                label="Máximo de Tokens"
                 type="number"
-                min="50"
-                max="2000"
                 value={config.max_tokens}
-                onChange={(e) => handleChange('max_tokens', parseInt(e.target.value) || 300)}
-                placeholder="300"
+                onChange={(e) => handleChange('max_tokens', parseInt(e.target.value))}
+                min={50}
+                max={2000}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Número máximo de tokens na resposta (50-2000)
               </p>
             </div>
-
-            {/* Botão Salvar OpenAI */}
-            <div className="flex justify-end pt-2">
-              <Button
-                type="submit"
-                variant="primary"
-                className="flex items-center gap-2"
-                disabled={savingOpenAI}
-              >
-                <Save size={18} />
-                {savingOpenAI ? 'Salvando...' : 'Salvar Configuração OpenAI'}
-              </Button>
-            </div>
-          </form>
-        </Card>
-
-        {/* Card Sistema de Agendamento (Premium Shears) */}
-        <Card title="Sistema de Agendamento" icon={Calendar}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                URL da API do Premium Shears Scheduler
-              </label>
-              
-              {premiumShearsConfig.api_url_preview && !premiumShearsConfig.api_url && (
-                <div className="mb-2">
-                  <Badge variant="success" className="flex items-center gap-2 w-fit">
-                    <Key size={14} />
-                    URL configurada: {premiumShearsConfig.api_url_preview}
-                  </Badge>
-                </div>
-              )}
-
-              <Input
-                type="text"
-                value={premiumShearsConfig.api_url}
-                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, api_url: e.target.value})}
-                placeholder={premiumShearsConfig.api_url_preview ? 'Deixe em branco para manter a URL atual' : 'https://seu-projeto.supabase.co/functions/v1/api'}
-                icon={Key}
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Configure a URL da API do seu sistema de agendamento
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                API Key (opcional)
-              </label>
-              
-              {premiumShearsConfig.has_key && !premiumShearsConfig.api_key && (
-                <div className="mb-2">
-                  <Badge variant="success" className="flex items-center gap-2 w-fit">
-                    <Key size={14} />
-                    API Key configurada
-                  </Badge>
-                </div>
-              )}
-
-              <div className="relative">
-                <Input
-                  type={showPremiumShearsKey ? 'text' : 'password'}
-                  value={premiumShearsConfig.api_key}
-                  onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, api_key: e.target.value})}
-                  placeholder={premiumShearsConfig.has_key ? 'Deixe em branco para manter a chave atual' : 'Sua API key se necessário'}
-                  icon={Key}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPremiumShearsKey(!showPremiumShearsKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  {showPremiumShearsKey ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="use-premium-shears"
-                checked={premiumShearsConfig.enabled}
-                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, enabled: e.target.checked})}
-                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-              />
-              <label htmlFor="use-premium-shears" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Usar Premium Shears Scheduler
-              </label>
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                <strong>Webhook URL para o Premium Shears:</strong>
-              </p>
-              <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1 break-all">
-                {api.defaults.baseURL || 'https://projetomensagem-production.up.railway.app'}/api/webhooks/premium-shears/appointment-created
-              </p>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                Configure esta URL no seu sistema de agendamento para receber notificações quando agendamentos forem criados
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Número da Barbearia para Notificações
-              </label>
-              <Input
-                type="text"
-                value={premiumShearsConfig.barbearia_phone}
-                onChange={(e) => setPremiumShearsConfig({...premiumShearsConfig, barbearia_phone: e.target.value.replace(/\D/g, '')})}
-                placeholder="5511999999999 (apenas números com código do país)"
-                icon={Calendar}
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Número WhatsApp que receberá notificações quando agendamentos forem criados, cancelados ou modificados. Use apenas números com código do país (ex: 5511999999999)
-              </p>
-            </div>
-
-            {/* Botão Salvar Scheduler */}
-            <div className="flex justify-end pt-2">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleSaveScheduler}
-                disabled={savingScheduler || loadingScheduler}
-                className="flex items-center gap-2"
-              >
-                <Save size={18} />
-                {savingScheduler ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
-              </Button>
-            </div>
           </div>
         </Card>
-      </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end gap-4">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={loadConfig}
+            disabled={saving}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            className="flex items-center gap-2"
+            disabled={saving}
+          >
+            <Save size={20} />
+            {saving ? 'Salvando...' : 'Salvar Configurações'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 };

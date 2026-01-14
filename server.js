@@ -1,22 +1,55 @@
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:1',message:'Server.js entry point',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+// #endregion
 require('dotenv').config();
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:3',message:'After dotenv.config',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+// #endregion
 const express = require('express');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:5',message:'After require express',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+// #endregion
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:9',message:'Before require middleware',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+// #endregion
 const logger = require('./middleware/logger');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:11',message:'After require logger',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+// #endregion
 const errorHandler = require('./middleware/errorHandler');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:13',message:'After require errorHandler',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+// #endregion
 const { testConnection } = require('./config/database');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:15',message:'After require database',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+// #endregion
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:17',message:'Before require routes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+// #endregion
 const authRoutes = require('./routes/auth');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:19',message:'After require authRoutes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+// #endregion
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
 const chatbotRoutes = require('./routes/chatbot');
 const conversationsRoutes = require('./routes/conversations');
 const configRoutes = require('./routes/config');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:25',message:'Before require whatsappRoutes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+// #endregion
 const whatsappRoutes = require('./routes/whatsapp');
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:27',message:'After require whatsappRoutes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+// #endregion
 const crmRoutes = require('./routes/crm');
-const googleRoutes = require('./routes/google');
+// const calendarRoutes = require('./routes/calendar'); // Removido
+const googleRoutes = require('./routes/google'); // Mantido para retornar 404
 const automationRoutes = require('./routes/automations');
-const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -75,10 +108,10 @@ app.get('/', (req, res) => {
       config: '/api/config',
       whatsapp: '/api/whatsapp',
       crm: '/api/crm',
-      google: '/api/google',
+      // calendar: '/api/calendar', // Removido
+      // google: '/api/google', // Removido - use Premium Shears Scheduler
       automations: '/api/automations',
-      apiKeys: '/api/api-keys',
-      webhooks: '/api/webhooks'
+      apiKeys: '/api/api-keys'
     },
     timestamp: new Date().toISOString()
   });
@@ -114,10 +147,10 @@ app.use('/api/conversations', conversationsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/crm', crmRoutes);
-app.use('/api/google', googleRoutes);
+// app.use('/api/calendar', calendarRoutes); // Removido
+app.use('/api/google', googleRoutes); // Retorna 404 - Google Calendar removido
 app.use('/api/automations', automationRoutes);
 app.use('/api/api-keys', require('./routes/api-keys'));
-app.use('/api/webhooks', webhookRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
