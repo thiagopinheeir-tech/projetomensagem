@@ -27,8 +27,15 @@ const Dashboard = () => {
     if (!user?.id) return;
 
     // Obter URL do backend (usar variável de ambiente ou localhost)
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const WS_PORT = import.meta.env.VITE_WS_PORT || '5001';
+    
+    // Validar e limpar URL
+    API_URL = API_URL.trim();
+    if (!API_URL || API_URL === 'undefined' || API_URL === 'null') {
+      console.warn('⚠️ VITE_API_URL não está configurada, usando localhost');
+      API_URL = 'http://localhost:5000';
+    }
     
     // Construir URL do WebSocket
     let wsUrl;
@@ -37,10 +44,17 @@ const Dashboard = () => {
       wsUrl = `ws://localhost:${WS_PORT}?user=${user.id}`;
     } else {
       // Produção (Railway): WebSocket está na mesma porta do Express, no path /ws
-      const url = new URL(API_URL);
-      const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      // WebSocket está anexado ao servidor HTTP na mesma porta, path /ws
-      wsUrl = `${wsProtocol}//${url.hostname}${url.port ? ':' + url.port : ''}/ws?user=${user.id}`;
+      try {
+        const url = new URL(API_URL);
+        const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        // WebSocket está anexado ao servidor HTTP na mesma porta, path /ws
+        wsUrl = `${wsProtocol}//${url.hostname}${url.port ? ':' + url.port : ''}/ws?user=${user.id}`;
+      } catch (error) {
+        console.error('❌ Erro ao construir URL do WebSocket:', error);
+        console.error('API_URL inválida:', API_URL);
+        // Fallback para localhost se a URL for inválida
+        wsUrl = `ws://localhost:${WS_PORT}?user=${user.id}`;
+      }
     }
     
     const ws = new WebSocket(wsUrl);
