@@ -375,7 +375,7 @@ class BookingService {
         let calendarError = null;
         
         const calendarService = await getSchedulerService(userId);
-        const schedulerType = calendarService === premiumShearsScheduler ? 'premium_shears' : 'google_calendar';
+        const schedulerType = 'premium_shears';
         
         try {
           appt = await calendarService.createAppointment({
