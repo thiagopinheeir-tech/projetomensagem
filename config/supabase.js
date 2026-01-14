@@ -111,24 +111,40 @@ if (!supabaseUrl || !supabaseKey) {
         return { data: data || null, error: null };
       },
       
-      saveChatbotConfig: async (config) => {
+      saveChatbotConfig: async (config, userId = null) => {
         // Upsert: inserir ou atualizar configuração
-        const { data: existing } = await supabase
+        let query = supabase
           .from('configurations')
-          .select('id')
-          .limit(1)
-          .single();
+          .select('id');
+        
+        if (userId) {
+          query = query.eq('user_id', userId);
+        }
+        
+        const { data: existing } = await query.limit(1).single();
         
         const configData = {
           ...config,
           updated_at: new Date().toISOString()
         };
         
+        if (userId) {
+          configData.user_id = userId;
+        }
+        
         if (existing) {
-          return supabase
-            .from('configurations')
-            .update(configData)
-            .eq('id', existing.id);
+          if (userId) {
+            return supabase
+              .from('configurations')
+              .update(configData)
+              .eq('id', existing.id)
+              .eq('user_id', userId);
+          } else {
+            return supabase
+              .from('configurations')
+              .update(configData)
+              .eq('id', existing.id);
+          }
         } else {
           return supabase
             .from('configurations')

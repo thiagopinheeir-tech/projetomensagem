@@ -48,13 +48,32 @@ class AutomationService {
       
       if (!menuState) {
         // Buscar no banco
-        // Filtrar por userId para isolamento multi-tenant
-        const result = await query(
-          `SELECT menu_id, expires_at 
-           FROM automation_menu_state 
-           WHERE phone = $1 AND user_id = $2 AND expires_at > NOW()`,
-          [phone, userId]
-        );
+        // Tentar com user_id primeiro (multi-tenant), fallback para sem user_id
+        let result;
+        try {
+          const { convertUserIdForTable } = require('../utils/userId-converter');
+          const convertedUserId = userId ? await convertUserIdForTable('automation_menu_state', userId) : null;
+          
+          if (convertedUserId) {
+            result = await query(
+              `SELECT menu_id, expires_at 
+               FROM automation_menu_state 
+               WHERE phone = $1 AND user_id = $2 AND expires_at > NOW()`,
+              [phone, convertedUserId]
+            );
+          } else {
+            throw new Error('userId não disponível');
+          }
+        } catch (error) {
+          // Fallback: buscar sem user_id (tabela pode não ter a coluna ou userId não disponível)
+          console.warn(`⚠️ [AutomationService] Buscando menu sem user_id: ${error.message}`);
+          result = await query(
+            `SELECT menu_id, expires_at 
+             FROM automation_menu_state 
+             WHERE phone = $1 AND expires_at > NOW()`,
+            [phone]
+          );
+        }
         
         if (result.rows.length === 0) {
           return { handled: false };
@@ -70,7 +89,18 @@ class AutomationService {
       // Verificar expiração
       if (new Date() > menuState.expiresAt) {
         this.menuStateCache.delete(phone);
-        await query('DELETE FROM automation_menu_state WHERE phone = $1 AND user_id = $2', [phone, userId]);
+        try {
+          const { convertUserIdForTable } = require('../utils/userId-converter');
+          const convertedUserId = userId ? await convertUserIdForTable('automation_menu_state', userId) : null;
+          if (convertedUserId) {
+            await query('DELETE FROM automation_menu_state WHERE phone = $1 AND user_id = $2', [phone, convertedUserId]);
+          } else {
+            await query('DELETE FROM automation_menu_state WHERE phone = $1', [phone]);
+          }
+        } catch (error) {
+          // Fallback: deletar sem user_id
+          await query('DELETE FROM automation_menu_state WHERE phone = $1', [phone]);
+        }
         return { handled: false };
       }
 
