@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Key, Save, AlertCircle, Eye, EyeOff, RefreshCw, BookOpen } from 'lucide-react';
+import { Key, Save, AlertCircle, Eye, EyeOff, RefreshCw, BookOpen, Calendar, CheckCircle } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -11,7 +11,9 @@ import toast from 'react-hot-toast';
 const APIManager = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingScheduler, setSavingScheduler] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [showSchedulerKey, setShowSchedulerKey] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [config, setConfig] = useState({
     openai_key: '',
@@ -20,10 +22,17 @@ const APIManager = () => {
     max_tokens: 300,
     // Prompt do chatbot é gerenciado por Perfil/ChatbotSettings.
   });
+  const [schedulerConfig, setSchedulerConfig] = useState({
+    api_url: '',
+    api_key: '',
+    enabled: false,
+    barbearia_phone: ''
+  });
   const [keyPreview, setKeyPreview] = useState('');
 
   useEffect(() => {
     loadConfig();
+    loadSchedulerConfig();
   }, []);
 
   const loadConfig = async () => {
@@ -79,8 +88,52 @@ const APIManager = () => {
     }
   };
 
+  const loadSchedulerConfig = async () => {
+    try {
+      const response = await api.get('/api/config/scheduler');
+      if (response.data.success) {
+        setSchedulerConfig({
+          api_url: response.data.config.api_url || '',
+          api_key: '',
+          enabled: response.data.config.enabled || false,
+          barbearia_phone: response.data.config.barbearia_phone || ''
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração do scheduler:', error);
+    }
+  };
+
   const handleChange = (field, value) => {
     setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSchedulerChange = (field, value) => {
+    setSchedulerConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveScheduler = async (e) => {
+    e.preventDefault();
+    setSavingScheduler(true);
+
+    try {
+      const response = await api.put('/api/config/scheduler', {
+        api_url: schedulerConfig.api_url,
+        api_key: schedulerConfig.api_key || undefined,
+        enabled: schedulerConfig.enabled,
+        barbearia_phone: schedulerConfig.barbearia_phone
+      });
+
+      if (response.data.success) {
+        toast.success('Configuração do Scheduler salva com sucesso!');
+        setTimeout(loadSchedulerConfig, 500);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Erro ao salvar configuração do scheduler');
+      console.error(error);
+    } finally {
+      setSavingScheduler(false);
+    }
   };
 
   if (loading) {
@@ -253,9 +306,104 @@ const APIManager = () => {
             disabled={saving}
           >
             <Save size={20} />
-            {saving ? 'Salvando...' : 'Salvar Configurações'}
+            {saving ? 'Salvando...' : 'Salvar Configuração OpenAI'}
           </Button>
         </div>
+      </form>
+
+      {/* Card Premium Shears Scheduler */}
+      <form onSubmit={handleSaveScheduler} className="space-y-6">
+        <Card title="Sistema de Agendamento Premium Shears" icon={Calendar}>
+          <div className="space-y-4">
+            {schedulerConfig.api_url && (
+              <div className="mb-2">
+                <Badge variant="success" className="flex items-center gap-2 w-fit">
+                  <CheckCircle size={14} />
+                  Sistema configurado
+                </Badge>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                URL da API do Premium Shears
+              </label>
+              <Input
+                type="url"
+                value={schedulerConfig.api_url}
+                onChange={(e) => handleSchedulerChange('api_url', e.target.value)}
+                placeholder="https://seu-projeto.supabase.co/functions/v1/api"
+                icon={Calendar}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                URL completa da API do Premium Shears Scheduler
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                API Key (Opcional)
+              </label>
+              <div className="relative">
+                <Input
+                  type={showSchedulerKey ? 'text' : 'password'}
+                  value={schedulerConfig.api_key}
+                  onChange={(e) => handleSchedulerChange('api_key', e.target.value)}
+                  placeholder="Deixe em branco para manter a chave atual"
+                  icon={Key}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSchedulerKey(!showSchedulerKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  {showSchedulerKey ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Número do WhatsApp da Barbearia
+              </label>
+              <Input
+                type="tel"
+                value={schedulerConfig.barbearia_phone}
+                onChange={(e) => handleSchedulerChange('barbearia_phone', e.target.value)}
+                placeholder="5511999999999"
+                icon={Calendar}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Número que receberá notificações de agendamentos (formato: 5511999999999)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="scheduler_enabled"
+                checked={schedulerConfig.enabled}
+                onChange={(e) => handleSchedulerChange('enabled', e.target.checked)}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <label htmlFor="scheduler_enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Ativar sistema de agendamento
+              </label>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                variant="primary"
+                className="flex items-center gap-2"
+                disabled={savingScheduler}
+              >
+                <Save size={20} />
+                {savingScheduler ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
+              </Button>
+            </div>
+          </div>
+        </Card>
       </form>
     </div>
   );
