@@ -14,7 +14,6 @@ const conversationsRoutes = require('./routes/conversations');
 const configRoutes = require('./routes/config');
 const whatsappRoutes = require('./routes/whatsapp');
 const crmRoutes = require('./routes/crm');
-const calendarRoutes = require('./routes/calendar');
 const googleRoutes = require('./routes/google');
 const automationRoutes = require('./routes/automations');
 const webhookRoutes = require('./routes/webhooks');
@@ -76,7 +75,6 @@ app.get('/', (req, res) => {
       config: '/api/config',
       whatsapp: '/api/whatsapp',
       crm: '/api/crm',
-      calendar: '/api/calendar',
       google: '/api/google',
       automations: '/api/automations',
       apiKeys: '/api/api-keys',
@@ -116,7 +114,6 @@ app.use('/api/conversations', conversationsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/crm', crmRoutes);
-app.use('/api/calendar', calendarRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/automations', automationRoutes);
 app.use('/api/api-keys', require('./routes/api-keys'));
