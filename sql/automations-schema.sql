@@ -50,9 +50,9 @@ CREATE TABLE IF NOT EXISTS booking_appointments (
   start_time TIMESTAMP NOT NULL,
   end_time TIMESTAMP NOT NULL,
   status VARCHAR(50) DEFAULT 'confirmed', -- 'confirmed', 'cancelled', 'completed'
-  google_calendar_event_id TEXT, -- ID do evento no Google Calendar (se integrado)
-  external_event_id TEXT, -- ID do evento no sistema externo (Premium Shears ou Google Calendar)
-  scheduler_type VARCHAR(50) DEFAULT 'google_calendar', -- 'google_calendar' | 'premium_shears'
+  google_calendar_event_id TEXT, -- DEPRECATED: Google Calendar foi removido. Usar external_event_id.
+  external_event_id TEXT, -- ID do evento no sistema externo (Premium Shears)
+  scheduler_type VARCHAR(50) DEFAULT 'premium_shears', -- 'premium_shears' (Google Calendar removido)
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

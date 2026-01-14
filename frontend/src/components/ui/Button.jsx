@@ -5,6 +5,7 @@ const Button = ({ children, variant = 'primary', size = 'md', className = '', di
     primary: 'bg-primary text-white hover:bg-blue-600 focus:ring-primary',
     secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600',
     danger: 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500',
+    success: 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-500',
     outline: 'border-2 border-primary text-primary hover:bg-primary hover:text-white focus:ring-primary',
   };
 

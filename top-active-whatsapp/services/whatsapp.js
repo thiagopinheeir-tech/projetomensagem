@@ -1100,7 +1100,7 @@ class WhatsAppService {
               
               // A IA pode incluir a confirmação na resposta, mas também podemos adicionar uma mensagem
               if (!aiResponse.toLowerCase().includes('agendado') && !aiResponse.toLowerCase().includes('confirmado')) {
-                const confirmationMsg = `\n\n✅ Agendamento confirmado no Google Calendar!${timeAdjustmentMsg}${bookingResult.htmlLink ? `\n🔗 Link: ${bookingResult.htmlLink}` : ''}`;
+                const confirmationMsg = `\n\n✅ Agendamento confirmado!${timeAdjustmentMsg}${bookingResult.htmlLink ? `\n🔗 Link: ${bookingResult.htmlLink}` : ''}`;
                 await msg.reply(aiResponse + confirmationMsg);
                 // Salvar mensagem com confirmação
                 const chatbotConfig = this.chatbot?.getConfig?.() || {};
@@ -1140,11 +1140,11 @@ class WhatsAppService {
               if (bookingResult.error && (bookingResult.error.includes('userId') || bookingResult.error.includes('profileId'))) {
                 errorMsg = `\n\n⚠️ Não foi possível criar o agendamento automaticamente. Por favor, verifique se você está logado e tem um perfil ativo no sistema.`;
               } else if (bookingResult.calendarError) {
-                errorMsg = `\n\n⚠️ Não foi possível criar o agendamento no Google Calendar: ${bookingResult.calendarError}\n\nPor favor, tente novamente ou entre em contato com o suporte.`;
+                errorMsg = `\n\n⚠️ Não foi possível criar o agendamento no sistema: ${bookingResult.calendarError}\n\nPor favor, tente novamente ou entre em contato com o suporte.`;
               } else if (bookingResult.error) {
                 errorMsg = `\n\n⚠️ Erro ao criar agendamento: ${bookingResult.error}\n\nPor favor, tente novamente.`;
               } else {
-                errorMsg = `\n\n⚠️ Não foi possível criar o agendamento no Google Calendar. O agendamento foi salvo localmente, mas não apareceu no calendário. Por favor, verifique sua conexão com o Google Calendar.`;
+                errorMsg = `\n\n⚠️ Não foi possível criar o agendamento. O agendamento foi salvo localmente, mas não apareceu no sistema de agendamento. Por favor, verifique sua configuração.`;
               }
               
               if (errorMsg) {

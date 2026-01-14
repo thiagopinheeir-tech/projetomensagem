@@ -37,7 +37,7 @@ FLUXO IDEAL (FUNIL)
 4) Preferência (profissional/observações)
 5) Confirmar agendamento
 
-SE HOUVER INTEGRAÇÃO COM AGENDA (Google Calendar)
+SE HOUVER INTEGRAÇÃO COM AGENDA
 - Valide disponibilidade antes de confirmar.
 - Se indisponível, ofereça 3 alternativas próximas e peça para escolher 1/2/3.
 

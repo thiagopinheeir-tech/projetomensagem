@@ -1,4 +1,3 @@
-const googleCalendarOAuth = require('./google-calendar-oauth');
 const premiumShearsScheduler = require('./premium-shears-scheduler');
 const appointmentNotifier = require('./appointment-notifier');
 const { query } = require('../config/database');
@@ -14,10 +13,11 @@ const SCHEDULER_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 /**
  * Busca configuração do scheduler e retorna o serviço correto
+ * Agora usa apenas Premium Shears (Google Calendar removido)
  */
 async function getSchedulerService(userId) {
   if (!userId) {
-    return googleCalendarOAuth; // Fallback para Google Calendar
+    throw new Error('userId é obrigatório para usar Premium Shears Scheduler');
   }
 
   // Verificar cache
@@ -29,18 +29,20 @@ async function getSchedulerService(userId) {
 
   try {
     const isConfigured = await premiumShearsScheduler.isConfiguredForUser(userId);
-    const service = isConfigured ? premiumShearsScheduler : googleCalendarOAuth;
+    if (!isConfigured) {
+      throw new Error('Premium Shears Scheduler não configurado. Configure em Chaves e Integrações → Sistema de Agendamento.');
+    }
     
     // Atualizar cache
     schedulerConfigCache.set(cacheKey, {
-      service,
+      service: premiumShearsScheduler,
       timestamp: Date.now()
     });
 
-    return service;
+    return premiumShearsScheduler;
   } catch (error) {
-    console.warn('⚠️ [getSchedulerService] Erro ao verificar configuração, usando Google Calendar:', error.message);
-    return googleCalendarOAuth; // Fallback para Google Calendar
+    console.warn('⚠️ [getSchedulerService] Erro ao verificar configuração:', error.message);
+    throw error;
   }
 }
 
@@ -369,7 +371,7 @@ class BookingService {
         }
 
         const calendarService = await getSchedulerService(userId);
-        const schedulerType = calendarService === premiumShearsScheduler ? 'premium_shears' : 'google_calendar';
+        const schedulerType = 'premium_shears';
         
         const duration = state.profileConfig?.serviceDurationMinutes || this.getDurationMinutes();
         let appt = null;
@@ -385,9 +387,9 @@ class BookingService {
             durationMinutes: duration,
             notes: ''
           });
-          console.log(`✅ Agendamento criado no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}: ${appt.eventId || appt.id}`);
+          console.log(`✅ Agendamento criado no Premium Shears: ${appt.eventId || appt.id}`);
         } catch (err) {
-          console.error(`❌ Erro ao criar agendamento no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}:`, err.message);
+          console.error(`❌ Erro ao criar agendamento no Premium Shears:`, err.message);
           calendarError = err;
           // Continuar para salvar no banco mesmo se falhar
         }
@@ -403,10 +405,9 @@ class BookingService {
             service: state.service || 'Agendamento',
             startTime: new Date(slot.startISO),
             endTime: new Date(new Date(slot.startISO).getTime() + duration * 60000),
-            googleCalendarEventId: schedulerType === 'google_calendar' ? (appt?.eventId || appt?.id || null) : null,
-            externalEventId: schedulerType === 'premium_shears' ? (appt?.eventId || appt?.id || null) : null,
+            externalEventId: appt?.eventId || appt?.id || null,
             schedulerType: schedulerType,
-            notes: calendarError ? `Erro ao criar no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}: ${calendarError.message}` : null
+            notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : null
           });
           savedAppointmentId = savedAppt?.id || appt?.eventId || appt?.id;
         } catch (dbError) {
@@ -714,9 +715,9 @@ class BookingService {
         duration
       });
 
-      // Buscar serviço de agendamento correto (Premium Shears ou Google Calendar)
+      // Buscar serviço de agendamento (Premium Shears)
       const calendarService = await getSchedulerService(userId);
-      const schedulerType = calendarService === premiumShearsScheduler ? 'premium_shears' : 'google_calendar';
+      const schedulerType = 'premium_shears';
       console.log(`📅 [createAppointmentFromAI] Usando serviço: ${schedulerType}`);
 
       // Criar evento no sistema de agendamento
@@ -1328,7 +1329,7 @@ class BookingService {
   /**
    * Salva agendamento no banco de dados (Supabase ou PostgreSQL)
    */
-  async saveAppointmentToDatabase({ userId, profileId, phone, clientName, service, startTime, endTime, googleCalendarEventId = null, externalEventId = null, schedulerType = 'google_calendar', notes = null }) {
+  async saveAppointmentToDatabase({ userId, profileId, phone, clientName, service, startTime, endTime, externalEventId = null, schedulerType = 'premium_shears', notes = null }) {
     try {
       const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
       

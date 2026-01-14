@@ -32,7 +32,7 @@ FLUXO IDEAL
 4) Coletar data/horário
 5) Confirmar
 
-SE HOUVER INTEGRAÇÃO COM AGENDA (Google Calendar)
+SE HOUVER INTEGRAÇÃO COM AGENDA
 - Valide disponibilidade antes de confirmar.
 - Se não houver horário, ofereça 3 alternativas próximas e peça escolha 1/2/3.
 

@@ -387,9 +387,9 @@ class BookingService {
             durationMinutes: duration,
             notes: ''
           });
-          console.log(`✅ Agendamento criado no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}: ${appt.eventId || appt.id}`);
+          console.log(`✅ Agendamento criado no Premium Shears: ${appt.eventId || appt.id}`);
         } catch (err) {
-          console.error(`❌ Erro ao criar agendamento no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}:`, err.message);
+          console.error(`❌ Erro ao criar agendamento no Premium Shears:`, err.message);
           calendarError = err;
           // Continuar para salvar no banco mesmo se falhar
         }
@@ -407,7 +407,7 @@ class BookingService {
             endTime: new Date(new Date(slot.startISO).getTime() + duration * 60000),
             externalEventId: appt?.eventId || appt?.id || null,
             schedulerType: schedulerType,
-            notes: calendarError ? `Erro ao criar no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}: ${calendarError.message}` : null
+            notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : null
           });
           savedAppointmentId = savedAppt?.id || appt?.eventId || appt?.id;
         } catch (dbError) {
@@ -714,9 +714,9 @@ class BookingService {
         duration
       });
 
-      // Buscar serviço de agendamento correto (Premium Shears ou Google Calendar)
+      // Buscar serviço de agendamento (Premium Shears)
       const calendarService = await getSchedulerService(userId);
-      const schedulerType = calendarService === premiumShearsScheduler ? 'premium_shears' : 'google_calendar';
+      const schedulerType = 'premium_shears';
       console.log(`📅 [createAppointmentFromAI] Usando serviço: ${schedulerType}`);
 
       // Criar evento no sistema de agendamento
@@ -742,7 +742,7 @@ class BookingService {
           intervalMinutes: Number.isFinite(intervalMinutes) && intervalMinutes >= 0 ? intervalMinutes : 0,
           notes: notes
         });
-        console.log(`✅ [createAppointmentFromAI] Agendamento criado no ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}:`, {
+        console.log(`✅ [createAppointmentFromAI] Agendamento criado no Premium Shears:`, {
           eventId: appt.eventId || appt.id,
           htmlLink: appt.htmlLink?.substring(0, 80)
         });
@@ -1207,12 +1207,11 @@ class BookingService {
       // Deletar do sistema de agendamento se tiver eventId
       if (eventId) {
         try {
-          // Determinar qual serviço usar baseado no scheduler_type
-          const serviceToUse = schedulerType === 'premium_shears' ? premiumShearsScheduler : googleCalendarOAuth;
-          await serviceToUse.deleteAppointment({ userId, eventId });
-          console.log(`✅ [handleCancelAppointment] Evento deletado do ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}`);
+          // Deletar do Premium Shears
+          await premiumShearsScheduler.deleteAppointment({ userId, eventId });
+          console.log(`✅ [handleCancelAppointment] Evento deletado do Premium Shears`);
         } catch (calendarError) {
-          console.error(`⚠️ [handleCancelAppointment] Erro ao deletar do ${schedulerType === 'premium_shears' ? 'Premium Shears' : 'Google Calendar'}:`, calendarError.message);
+          console.error(`⚠️ [handleCancelAppointment] Erro ao deletar do Premium Shears:`, calendarError.message);
           // Continuar mesmo se falhar
         }
       }
@@ -1315,13 +1314,9 @@ class BookingService {
   /**
    * Salva agendamento no banco de dados (Supabase ou PostgreSQL)
    */
-  async saveAppointmentToDatabase({ userId, profileId, phone, clientName, service, startTime, endTime, googleCalendarEventId = null, externalEventId = null, schedulerType = 'google_calendar', notes = null }) {
+  async saveAppointmentToDatabase({ userId, profileId, phone, clientName, service, startTime, endTime, externalEventId = null, schedulerType = 'premium_shears', notes = null }) {
     try {
       const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
-      
-      // Determinar qual ID externo usar baseado no tipo de scheduler
-      const finalExternalEventId = schedulerType === 'premium_shears' ? externalEventId : (googleCalendarEventId || externalEventId);
-      const finalGoogleCalendarEventId = schedulerType === 'google_calendar' ? finalExternalEventId : null;
       
       // Salvar no Supabase primeiro (se configurado)
       if (isConfigured && supabase) {
@@ -1338,12 +1333,9 @@ class BookingService {
           scheduler_type: schedulerType
         };
 
-        // Adicionar ID externo baseado no tipo
-        if (schedulerType === 'google_calendar') {
-          insertData.google_calendar_event_id = finalGoogleCalendarEventId;
-        }
-        if (finalExternalEventId) {
-          insertData.external_event_id = String(finalExternalEventId);
+        // Adicionar ID externo
+        if (externalEventId) {
+          insertData.external_event_id = String(externalEventId);
         }
 
         const { data, error } = await supabase
@@ -1365,9 +1357,9 @@ class BookingService {
       const result = await query(
         `INSERT INTO booking_appointments (
           user_id, profile_id, phone, client_name, service,
-          start_time, end_time, status, google_calendar_event_id, external_event_id, scheduler_type, notes,
+          start_time, end_time, status, external_event_id, scheduler_type, notes,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING id`,
         [
           userId,
@@ -1378,8 +1370,7 @@ class BookingService {
           startTime,
           endTime,
           'confirmed',
-          finalGoogleCalendarEventId,
-          finalExternalEventId ? String(finalExternalEventId) : null,
+          externalEventId ? String(externalEventId) : null,
           schedulerType,
           notes || null
         ]

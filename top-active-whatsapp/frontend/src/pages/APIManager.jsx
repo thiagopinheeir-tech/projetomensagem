@@ -28,10 +28,6 @@ const APIManager = () => {
     redirectUri: ''
   });
 
-  const [googleStatus, setGoogleStatus] = useState({ connected: false, calendarIdDefault: null });
-  const [googleCalendars, setGoogleCalendars] = useState([]);
-  const [selectedCalendarId, setSelectedCalendarId] = useState('');
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
   
   const [premiumShearsConfig, setPremiumShearsConfig] = useState({
     api_url: '',
@@ -46,7 +42,7 @@ const APIManager = () => {
 
   useEffect(() => {
     (async () => {
-      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadGoogleStatus(), loadSchedulerConfig()]);
+      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadSchedulerConfig()]);
     })();
   }, []);
 
@@ -100,20 +96,6 @@ const APIManager = () => {
     }
   };
 
-  const loadGoogleStatus = async () => {
-    try {
-      const resp = await api.get('/api/google/status');
-      if (resp.data.success) {
-        setGoogleStatus({
-          connected: !!resp.data.connected,
-          calendarIdDefault: resp.data.calendarIdDefault || null
-        });
-        setSelectedCalendarId(resp.data.calendarIdDefault || '');
-      }
-    } catch (e) {
-      console.warn('Google status error:', e?.response?.data || e);
-    }
-  };
 
   const loadSchedulerConfig = async () => {
     try {
@@ -164,75 +146,6 @@ const APIManager = () => {
     }
   };
 
-  const handleConnectGoogle = async () => {
-    try {
-      setLoadingGoogle(true);
-      if (!activeProfileId) {
-        toast.error('Ative um perfil em Chatbot antes de conectar o Google.');
-        return;
-      }
-      const resp = await api.get('/api/google/oauth/start');
-      const url = resp.data?.url;
-      if (!url) throw new Error('URL OAuth não retornada');
-      window.open(url, '_blank', 'noopener,noreferrer');
-      toast.success('Conclua a conexão na aba do Google e depois clique em "Atualizar status".');
-    } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Erro ao iniciar conexão com Google';
-      toast.error(msg);
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
-
-  const handleLoadCalendars = async () => {
-    try {
-      setLoadingGoogle(true);
-      const resp = await api.get('/api/google/calendars');
-      if (resp.data.success && resp.data.calendars) {
-        setGoogleCalendars(resp.data.calendars);
-      }
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Erro ao listar calendários');
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
-
-  const handleSelectCalendar = async () => {
-    try {
-      setLoadingGoogle(true);
-      if (!activeProfileId) {
-        toast.error('Ative um perfil em Chatbot antes de selecionar calendário.');
-        return;
-      }
-      const resp = await api.post('/api/google/calendars/select', { calendarId: selectedCalendarId });
-      if (resp.data.success) {
-        toast.success('Calendário selecionado com sucesso!');
-        await loadGoogleStatus();
-      }
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Erro ao selecionar calendário');
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    try {
-      setLoadingGoogle(true);
-      const resp = await api.post('/api/google/disconnect');
-      if (resp.data.success) {
-        toast.success('Credenciais do Google removidas com sucesso!');
-        setGoogleStatus({ connected: false, calendarIdDefault: null });
-        setSelectedCalendarId('');
-        setGoogleCalendars([]);
-      }
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Erro ao desconectar Google');
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -446,141 +359,6 @@ const APIManager = () => {
           </div>
         </Card>
 
-        {/* Card Google OAuth */}
-        <Card title="Google OAuth (Agenda)" icon={Calendar}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Google OAuth Client ID
-              </label>
-              <Input
-                label="Google OAuth Client ID"
-                value={googleOAuth.clientId}
-                onChange={(e) => handleGoogleChange('clientId', e.target.value)}
-                placeholder="Seu Client ID do Google"
-              />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Google OAuth Client Secret
-                </label>
-                <div className="relative">
-                  <Input
-                    type={showGoogleSecret ? 'text' : 'password'}
-                    value={googleOAuth.clientSecret}
-                    onChange={(e) => handleGoogleChange('clientSecret', e.target.value)}
-                    placeholder="Deixe em branco para manter o secret atual"
-                    icon={Key}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleSecret(!showGoogleSecret)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    {showGoogleSecret ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Dica: para salvar o secret, o backend precisa ter <span className="font-mono">ENCRYPTION_KEY</span> definido no <span className="font-mono">.env</span>.
-                </p>
-              </div>
-
-              <Input
-                label="Google Redirect URI"
-                value={googleOAuth.redirectUri}
-                onChange={(e) => handleGoogleChange('redirectUri', e.target.value)}
-                placeholder="http://localhost:5000/api/google/oauth/callback"
-              />
-
-              <div className="flex flex-col gap-3 pt-2">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Badge variant={googleStatus.connected ? 'success' : 'default'} className="flex items-center gap-2 px-4 py-2">
-                    <Calendar size={16} />
-                    {googleStatus.connected ? 'Conectado' : 'Não conectado'}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    className="flex items-center gap-2"
-                    onClick={handleConnectGoogle}
-                    disabled={loadingGoogle}
-                  >
-                    <Calendar size={18} />
-                    Conectar Google
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="flex items-center gap-2"
-                    onClick={loadGoogleStatus}
-                    disabled={loadingGoogle}
-                  >
-                    <RefreshCw size={18} />
-                    Atualizar status
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    className="flex items-center gap-2"
-                    onClick={handleDisconnectGoogle}
-                    disabled={loadingGoogle}
-                  >
-                    <XCircle size={18} />
-                    Remover Credenciais
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="lg:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Calendário padrão
-                    </label>
-                    <select
-                      value={selectedCalendarId}
-                      onChange={(e) => setSelectedCalendarId(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      disabled={loadingGoogle || !googleStatus.connected}
-                    >
-                      <option value="">Selecione um calendário...</option>
-                      {googleCalendars.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.summary}{c.primary ? ' (principal)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Selecionado atualmente: {googleStatus.calendarIdDefault || '(nenhum)'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-end gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="flex items-center gap-2 w-full justify-center"
-                      onClick={handleLoadCalendars}
-                      disabled={loadingGoogle || !googleStatus.connected}
-                    >
-                      <RefreshCw size={18} />
-                      Listar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex items-center gap-2 w-full justify-center"
-                      onClick={handleSelectCalendar}
-                      disabled={loadingGoogle || !googleStatus.connected || !selectedCalendarId}
-                    >
-                      <Save size={18} />
-                      Usar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
         {/* Card Sistema de Agendamento (Premium Shears) */}
         <Card title="Sistema de Agendamento" icon={Calendar}>
           <div className="space-y-4">
@@ -651,7 +429,7 @@ const APIManager = () => {
                 className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
               />
               <label htmlFor="use-premium-shears" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Usar Premium Shears Scheduler ao invés de Google Calendar
+                Usar Premium Shears Scheduler
               </label>
             </div>
 

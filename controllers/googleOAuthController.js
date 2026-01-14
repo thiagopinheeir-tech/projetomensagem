@@ -113,12 +113,13 @@ async function getOAuthConfigForUser(userId) {
 }
 
 function getScopes() {
-  // Escopo mínimo para freebusy + criar eventos
+  // Google Calendar foi removido - retornar array vazio
+  // Se houver outros escopos no futuro, adicionar aqui
   const raw = process.env.GOOGLE_OAUTH_SCOPES;
   if (raw && String(raw).trim()) {
     return String(raw).split(',').map(s => s.trim()).filter(Boolean);
   }
-  return ['https://www.googleapis.com/auth/calendar'];
+  return [];
 }
 
 function buildOAuthClient({ clientId, clientSecret, redirectUri }) {
@@ -326,7 +327,6 @@ module.exports = {
       return res.json({
         success: true,
         connected: hasValidToken,
-        calendarIdDefault: row?.calendar_id_default || null,
         profileId: active?.id || null,
         hasProfile: !!active,
         hasTokenRow: !!row
@@ -341,96 +341,6 @@ module.exports = {
     }
   },
 
-  async listCalendars(req, res) {
-    try {
-      const userId = req.userId || req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
-      }
-      const active = await getActiveProfileForUser(userId);
-      const row = active?.id ? await getProfileTokenRow(active.id) : null;
-      if (!row?.refresh_token_encrypted) {
-        return res.status(400).json({ success: false, message: 'Conecte sua conta Google primeiro' });
-      }
-
-      const oauthCfg = await getOAuthConfigForUser(userId);
-      const oauth2 = buildOAuthClient(oauthCfg);
-      
-      let refreshToken = null;
-      let accessToken = undefined;
-      
-      try {
-        refreshToken = encryption.decrypt(row.refresh_token_encrypted);
-      } catch (decryptError) {
-        console.error(`❌ [listCalendars] Erro ao descriptografar refresh_token:`, decryptError.message);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Erro ao descriptografar token. Refaça a autenticação OAuth.' 
-        });
-      }
-      
-      if (row.access_token_encrypted) {
-        try {
-          accessToken = encryption.decrypt(row.access_token_encrypted);
-        } catch (decryptError) {
-          console.warn(`⚠️ [listCalendars] Erro ao descriptografar access_token (continuando sem ele):`, decryptError.message);
-          // Access token é opcional, pode continuar sem ele
-        }
-      }
-      
-      oauth2.setCredentials({
-        refresh_token: refreshToken,
-        access_token: accessToken
-      });
-
-      const calendar = google.calendar({ version: 'v3', auth: oauth2 });
-      const resp = await calendar.calendarList.list({ maxResults: 250 });
-      const items = resp?.data?.items || [];
-
-      return res.json({
-        success: true,
-        calendars: items.map(c => ({
-          id: c.id,
-          summary: c.summary,
-          primary: !!c.primary,
-          accessRole: c.accessRole,
-          timeZone: c.timeZone
-        })),
-        selected: row.calendar_id_default || null
-      });
-    } catch (e) {
-      return res.status(500).json({ success: false, message: e.message || 'Erro ao listar calendários' });
-    }
-  },
-
-  async selectCalendar(req, res) {
-    try {
-      const userId = req.userId || req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
-      }
-      const { calendarId } = req.body || {};
-      if (!calendarId) {
-        return res.status(400).json({ success: false, message: 'calendarId é obrigatório' });
-      }
-
-      const active = await getActiveProfileForUser(userId);
-      const row = active?.id ? await getProfileTokenRow(active.id) : null;
-      if (!row) {
-        return res.status(400).json({ success: false, message: 'Conecte sua conta Google primeiro' });
-      }
-
-      await query(
-        `UPDATE profile_google_tokens SET calendar_id_default = $1, updated_at = CURRENT_TIMESTAMP
-         WHERE profile_id = $2`,
-        [String(calendarId), active.id]
-      );
-
-      return res.json({ success: true, message: 'Calendário selecionado' });
-    } catch (e) {
-      return res.status(500).json({ success: false, message: e.message || 'Erro ao selecionar calendário' });
-    }
-  },
 
   async disconnect(req, res) {
     try {

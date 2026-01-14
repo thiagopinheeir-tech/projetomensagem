@@ -10,11 +10,6 @@ router.get('/oauth/start', authMiddleware, requireUserId, googleOAuthController.
 // Callback do Google (não tem Bearer token; valida via state assinado)
 router.get('/oauth/callback', googleOAuthController.callback);
 
-// Listar calendários do usuário logado
-router.get('/calendars', authMiddleware, requireUserId, googleOAuthController.listCalendars);
-
-// Selecionar calendário padrão para agendamentos
-router.post('/calendar/select', authMiddleware, requireUserId, googleOAuthController.selectCalendar);
 
 // Status simples (se token existe)
 router.get('/status', authMiddleware, requireUserId, googleOAuthController.status);
