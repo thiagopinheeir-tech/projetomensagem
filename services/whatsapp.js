@@ -117,6 +117,7 @@ class WhatsAppService {
         const convertedUserId = await convertUserIdForTable('user_api_keys', userId);
         
         // Tentar buscar da tabela user_api_keys primeiro
+        console.log(`🔍 [initChatbot] Buscando API key para userId: ${userId}, convertedUserId: ${convertedUserId}`);
         const apiKeyResult = await query(
           `SELECT api_key_encrypted FROM user_api_keys 
            WHERE user_id = $1 AND provider = 'openai' AND is_active = true 
@@ -124,11 +125,21 @@ class WhatsAppService {
           [convertedUserId]
         );
         
+        console.log(`🔍 [initChatbot] Resultado da busca em user_api_keys:`, {
+          rowsFound: apiKeyResult.rows.length,
+          hasEncryptedKey: apiKeyResult.rows.length > 0 && !!apiKeyResult.rows[0]?.api_key_encrypted
+        });
+        
         if (apiKeyResult.rows.length > 0 && apiKeyResult.rows[0].api_key_encrypted) {
-          openaiApiKey = encryption.decrypt(apiKeyResult.rows[0].api_key_encrypted);
-          console.log(`✅ [initChatbot] API key do usuário ${userId} carregada do banco`);
+          try {
+            openaiApiKey = encryption.decrypt(apiKeyResult.rows[0].api_key_encrypted);
+            console.log(`✅ [initChatbot] API key do usuário ${userId} carregada do banco (user_api_keys)`);
+          } catch (decryptError) {
+            console.error(`❌ [initChatbot] Erro ao descriptografar API key:`, decryptError.message);
+          }
         } else {
           // Tentar buscar do chatbot_profiles (compatibilidade)
+          console.log(`🔍 [initChatbot] Tentando buscar de chatbot_profiles...`);
           const profileResult = await query(
             `SELECT openai_api_key_encrypted FROM chatbot_profiles 
              WHERE user_id = $1 AND is_active = true 
@@ -136,9 +147,36 @@ class WhatsAppService {
             [userId]
           );
           
+          console.log(`🔍 [initChatbot] Resultado da busca em chatbot_profiles:`, {
+            rowsFound: profileResult.rows.length,
+            hasEncryptedKey: profileResult.rows.length > 0 && !!profileResult.rows[0]?.openai_api_key_encrypted
+          });
+          
           if (profileResult.rows.length > 0 && profileResult.rows[0].openai_api_key_encrypted) {
-            openaiApiKey = encryption.decrypt(profileResult.rows[0].openai_api_key_encrypted);
-            console.log(`✅ [initChatbot] API key do usuário ${userId} carregada do perfil`);
+            try {
+              openaiApiKey = encryption.decrypt(profileResult.rows[0].openai_api_key_encrypted);
+              console.log(`✅ [initChatbot] API key do usuário ${userId} carregada do perfil`);
+            } catch (decryptError) {
+              console.error(`❌ [initChatbot] Erro ao descriptografar API key do perfil:`, decryptError.message);
+            }
+          } else {
+            // Tentar buscar de config_ai (fallback adicional)
+            console.log(`🔍 [initChatbot] Tentando buscar de config_ai...`);
+            const configAiResult = await query(
+              `SELECT openai_key_encrypted FROM config_ai 
+               WHERE user_id = $1 
+               LIMIT 1`,
+              [userId]
+            );
+            
+            if (configAiResult.rows.length > 0 && configAiResult.rows[0].openai_key_encrypted) {
+              try {
+                openaiApiKey = encryption.decrypt(configAiResult.rows[0].openai_key_encrypted);
+                console.log(`✅ [initChatbot] API key do usuário ${userId} carregada de config_ai`);
+              } catch (decryptError) {
+                console.error(`❌ [initChatbot] Erro ao descriptografar API key de config_ai:`, decryptError.message);
+              }
+            }
           }
         }
       } catch (error) {
@@ -149,6 +187,16 @@ class WhatsAppService {
     // Fallback para variável de ambiente (apenas se não tiver userId ou não encontrou no banco)
     if (!openaiApiKey) {
       openaiApiKey = process.env.OPENAI_API_KEY;
+      if (openaiApiKey) {
+        console.log(`✅ [initChatbot] Usando API key da variável de ambiente`);
+      }
+    }
+
+    // Log final do status da API key
+    if (openaiApiKey) {
+      console.log(`✅ [initChatbot] API key disponível: ${openaiApiKey.substring(0, 10)}...${openaiApiKey.substring(openaiApiKey.length - 4)}`);
+    } else {
+      console.warn(`⚠️ [initChatbot] Nenhuma API key encontrada (nem no banco nem em variável de ambiente)`);
     }
 
     // Inicializar chatbot com configuração padrão + config do banco
@@ -228,8 +276,16 @@ class WhatsAppService {
         console.warn('⚠️ Falha ao carregar configuração do banco; usando .env:', dbErr.message || dbErr);
       }
 
-      if (this.chatbotEnabled) {
-        console.log('✅ Chatbot IA inicializado e pronto!');
+      // Verificar se o chatbot realmente tem API key configurada
+      const hasApiKey = this.chatbot?.apiProvider !== 'none' && !!this.chatbot?.openai;
+      
+      if (this.chatbotEnabled && hasApiKey) {
+        console.log('✅ Chatbot IA inicializado e pronto! (API key configurada)');
+      } else if (this.chatbotEnabled && !hasApiKey) {
+        console.warn('⚠️ Chatbot habilitado mas API key não foi reconhecida pelo AIChatbot');
+        console.warn(`   - apiProvider: ${this.chatbot?.apiProvider}`);
+        console.warn(`   - openai configurado: ${!!this.chatbot?.openai}`);
+        this.chatbotEnabled = false; // Desabilitar se não tem API key válida
       } else {
         console.log('⚠️ Chatbot IA desabilitado (OPENAI_API_KEY não configurada)');
       }
