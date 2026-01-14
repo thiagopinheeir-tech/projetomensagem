@@ -140,6 +140,12 @@ https://projetomensagem-production.up.railway.app/api/webhooks/premium-shears/ap
 
 NÃO CHAMAR quando o agendamento vier da nossa API (evitar duplicação).
 
+⚠️ IMPORTANTE - NOTIFICAÇÕES:
+- NÃO envie notificações diretamente para o barbeiro do Premium Shears
+- NÃO crie funcionalidades de notificação própria no Premium Shears
+- Deixe nosso sistema fazer TODAS as notificações (cliente e barbeiro)
+- O Premium Shears apenas chama o webhook e nosso sistema cuida das notificações
+
 PAYLOAD PARA ENVIAR:
 POST https://projetomensagem-production.up.railway.app/api/webhooks/premium-shears/appointment-created
 Content-Type: application/json
@@ -249,5 +255,7 @@ async function notifyWhatsAppSystem(appointmentData, userId) {
 2. Chamar webhook APENAS quando agendamento for criado via UI Premium Shears, NÃO quando vier da nossa API
 3. Horário funcionamento: considerar 9h-20h (ajustar conforme necessário)
 4. Sempre validar conflitos de horário antes de criar agendamento
+5. ⚠️ NÃO notificar barbeiro diretamente - deixar nosso sistema fazer todas as notificações via webhook
+6. ⚠️ Premium Shears apenas chama webhook, nosso sistema notifica cliente e barbeiro
 
 IMPLEMENTE TODOS OS 4 ENDPOINTS E O WEBHOOK CONFORME ESPECIFICADO ACIMA.
