@@ -204,9 +204,17 @@ router.put('/ai', authMiddleware, async (req, res, next) => {
       );
       
       // Reinicializar chatbot da instância do usuário com nova chave
-      const instance = whatsappManager.getInstance(userId);
-      if (instance) {
-        await instance.initChatbot(userId);
+      try {
+        const instance = whatsappManager.getInstance(userId);
+        if (instance) {
+          await instance.initChatbot(userId);
+          console.log(`✅ [config/ai] Chatbot reinicializado para usuário ${userId}`);
+        } else {
+          console.log(`ℹ️ [config/ai] Instância WhatsApp não encontrada para usuário ${userId}. Chatbot será inicializado quando WhatsApp conectar.`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ [config/ai] Erro ao reinicializar chatbot: ${error.message}`);
+        // Não falhar a requisição se houver erro ao reinicializar
       }
     }
 

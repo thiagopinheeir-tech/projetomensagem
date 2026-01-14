@@ -143,9 +143,28 @@ router.post('/', authMiddleware, requireUserId, async (req, res, next) => {
       console.log(`✅ [api-keys] API key ${provider} criada para usuário ${userId}`);
     }
 
+    // Reinicializar chatbot se for OpenAI e a instância WhatsApp existir
+    if (provider.toLowerCase() === 'openai') {
+      try {
+        const whatsappManager = require('../services/whatsapp-manager');
+        const originalUserId = req.userId; // userId original (antes da conversão)
+        const instance = whatsappManager.getInstance(originalUserId);
+        
+        if (instance) {
+          await instance.initChatbot(originalUserId);
+          console.log(`✅ [api-keys] Chatbot reinicializado para usuário ${originalUserId}`);
+        } else {
+          console.log(`ℹ️ [api-keys] Instância WhatsApp não encontrada para usuário ${originalUserId}. Chatbot será inicializado quando WhatsApp conectar.`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ [api-keys] Erro ao reinicializar chatbot: ${error.message}`);
+        // Não falhar a requisição se houver erro ao reinicializar
+      }
+    }
+
     res.json({
       success: true,
-      message: `API key ${provider} salva com sucesso`
+      message: `API key ${provider} salva com sucesso${provider.toLowerCase() === 'openai' ? '. O chatbot será atualizado automaticamente.' : ''}`
     });
   } catch (error) {
     console.error('❌ Erro ao salvar API key:', error);
