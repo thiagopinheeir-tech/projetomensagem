@@ -38,6 +38,20 @@ class AIChatbot {
 
     // Usar API key do config (do usuário) ou fallback para variável de ambiente
     const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
+    
+    console.log(`🔍 [AIChatbot] Constructor - Verificando API key:`, {
+      hasConfigKey: !!config.openaiApiKey,
+      configKeyType: typeof config.openaiApiKey,
+      configKeyLength: config.openaiApiKey?.length,
+      hasEnvKey: !!process.env.OPENAI_API_KEY,
+      hasFinalKey: !!openaiApiKey,
+      finalKeyType: typeof openaiApiKey,
+      finalKeyLength: openaiApiKey?.length,
+      finalKeyIsEmpty: openaiApiKey === '',
+      finalKeyIsNull: openaiApiKey === null,
+      finalKeyIsUndefined: openaiApiKey === undefined
+    });
+    
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ai-chatbot.js:40',message:'AIChatbot constructor - verificando API key',data:{hasConfigKey:!!config.openaiApiKey,hasEnvKey:!!process.env.OPENAI_API_KEY,hasFinalKey:!!openaiApiKey,keyLength:openaiApiKey?.length,keyType:typeof openaiApiKey},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
     // #endregion

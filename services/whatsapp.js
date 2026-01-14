@@ -193,6 +193,16 @@ class WhatsAppService {
     }
 
     // Log final do status da API key
+    console.log(`🔍 [initChatbot] Status final da API key:`, {
+      hasApiKey: !!openaiApiKey,
+      apiKeyType: typeof openaiApiKey,
+      apiKeyLength: openaiApiKey?.length,
+      apiKeyIsEmpty: openaiApiKey === '',
+      apiKeyIsNull: openaiApiKey === null,
+      apiKeyIsUndefined: openaiApiKey === undefined,
+      preview: openaiApiKey ? `${openaiApiKey.substring(0, 7)}...${openaiApiKey.substring(Math.max(0, openaiApiKey.length - 4))}` : 'N/A'
+    });
+    
     if (openaiApiKey) {
       console.log(`✅ [initChatbot] API key disponível: ${openaiApiKey.substring(0, 10)}...${openaiApiKey.substring(openaiApiKey.length - 4)}`);
     } else {
