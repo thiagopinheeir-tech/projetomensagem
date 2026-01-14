@@ -132,10 +132,24 @@ class WhatsAppService {
         
         if (apiKeyResult.rows.length > 0 && apiKeyResult.rows[0].api_key_encrypted) {
           try {
-            openaiApiKey = encryption.decrypt(apiKeyResult.rows[0].api_key_encrypted);
-            console.log(`✅ [initChatbot] API key do usuário ${userId} carregada do banco (user_api_keys)`);
+            const encryptedValue = apiKeyResult.rows[0].api_key_encrypted;
+            console.log(`🔍 [initChatbot] Tentando descriptografar API key:`, {
+              encryptedLength: encryptedValue?.length,
+              encryptedPreview: encryptedValue ? `${encryptedValue.substring(0, 20)}...` : 'null'
+            });
+            openaiApiKey = encryption.decrypt(encryptedValue);
+            console.log(`✅ [initChatbot] API key do usuário ${userId} carregada do banco (user_api_keys)`, {
+              decryptedLength: openaiApiKey?.length,
+              decryptedPreview: openaiApiKey ? `${openaiApiKey.substring(0, 7)}...${openaiApiKey.substring(Math.max(0, openaiApiKey.length - 4))}` : 'null',
+              isNull: openaiApiKey === null,
+              isEmpty: openaiApiKey === ''
+            });
           } catch (decryptError) {
-            console.error(`❌ [initChatbot] Erro ao descriptografar API key:`, decryptError.message);
+            console.error(`❌ [initChatbot] Erro ao descriptografar API key:`, {
+              error: decryptError.message,
+              stack: decryptError.stack?.substring(0, 200)
+            });
+            openaiApiKey = null; // Garantir que está null em caso de erro
           }
         } else {
           // Tentar buscar do chatbot_profiles (compatibilidade)
