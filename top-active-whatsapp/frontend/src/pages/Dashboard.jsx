@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { MessageSquare, Users, TrendingUp, Send } from 'lucide-react';
+import { MessageSquare, Users, TrendingUp, Send, BookOpen } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Table from '../components/ui/Table';
+import Button from '../components/ui/Button';
 import WhatsAppAuth from '../components/WhatsAppAuth';
 import RecentConversations from '../components/RecentConversations';
+import SetupWizard from '../components/SetupWizard';
 import { useAuth } from '../hooks/useAuth'; // Import useAuth
 import api from '../lib/axios';
 
@@ -19,6 +21,7 @@ const Dashboard = () => {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState(null);
+  const [showWizard, setShowWizard] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -131,10 +134,24 @@ const Dashboard = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">Visão geral do seu negócio em tempo real</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Visão geral do seu negócio em tempo real</p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => setShowWizard(true)}
+          className="flex items-center gap-2"
+        >
+          <BookOpen size={18} />
+          Guia de Configuração
+        </Button>
       </div>
+
+      {showWizard && (
+        <SetupWizard onClose={() => setShowWizard(false)} />
+      )}
 
       {/* WhatsApp Auth Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

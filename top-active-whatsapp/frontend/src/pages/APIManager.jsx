@@ -9,24 +9,16 @@ import toast from 'react-hot-toast';
 
 const APIManager = () => {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingOpenAI, setSavingOpenAI] = useState(false);
+  const [savingScheduler, setSavingScheduler] = useState(false);
   const [showKey, setShowKey] = useState(false);
-  const [showGoogleSecret, setShowGoogleSecret] = useState(false);
   const [config, setConfig] = useState({
     openai_key: '',
     model: 'gpt-4o-mini',
     temperature: 0.7,
     max_tokens: 300,
-    // Prompt do chatbot é gerenciado por Perfil/ChatbotSettings.
   });
   const [keyPreview, setKeyPreview] = useState('');
-
-  const [activeProfileId, setActiveProfileId] = useState('');
-  const [googleOAuth, setGoogleOAuth] = useState({
-    clientId: '',
-    clientSecret: '',
-    redirectUri: ''
-  });
 
   
   const [premiumShearsConfig, setPremiumShearsConfig] = useState({
@@ -42,7 +34,7 @@ const APIManager = () => {
 
   useEffect(() => {
     (async () => {
-      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadSchedulerConfig()]);
+      await Promise.allSettled([loadConfig(), loadSchedulerConfig()]);
     })();
   }, []);
 
@@ -69,32 +61,6 @@ const APIManager = () => {
     }
   };
 
-  const loadActiveProfileAndGoogle = async () => {
-    try {
-      const profilesResp = await api.get('/api/chatbot/profiles');
-      const list = profilesResp.data?.profiles || [];
-      const active = list.find(p => p.is_active);
-      if (!active?.id) {
-        setActiveProfileId('');
-        return;
-      }
-      setActiveProfileId(active.id);
-
-      const profileResp = await api.get(`/api/chatbot/profiles/${active.id}`);
-      const p = profileResp.data?.profile;
-      if (profileResp.data?.success && p) {
-        setGoogleOAuth(prev => ({
-          ...prev,
-          clientId: p.google_oauth_client_id || '',
-          redirectUri: p.google_oauth_redirect_uri || ''
-          // secret nunca volta do backend; usuário redefine se quiser
-        }));
-      }
-    } catch (error) {
-      // silencioso: não travar a tela de API se chatbot/perfis não estiverem prontos
-      console.warn('Erro ao carregar perfil ativo/Google OAuth:', error?.response?.data || error);
-    }
-  };
 
 
   const loadSchedulerConfig = async () => {
@@ -123,7 +89,7 @@ const APIManager = () => {
 
   const handleSaveScheduler = async () => {
     try {
-      setSaving(true);
+      setSavingScheduler(true);
       const payload = {
         api_url: premiumShearsConfig.api_url?.trim() || null,
         api_key: premiumShearsConfig.api_key?.trim() || null,
@@ -142,78 +108,45 @@ const APIManager = () => {
       toast.error(error.response?.data?.message || 'Erro ao salvar configuração do scheduler');
       console.error(error);
     } finally {
-      setSaving(false);
+      setSavingScheduler(false);
     }
   };
 
 
-  const handleSave = async (e) => {
+  const handleSaveOpenAI = async (e) => {
     e.preventDefault();
+    setSavingOpenAI(true);
+
     try {
-      setSaving(true);
       const payload = {
-        openai_key: config.openai_key || undefined,
-        model: config.model,
-        temperature: config.temperature,
-        max_tokens: config.max_tokens
+        ...config,
+        // Só enviar chave se foi modificada
+        ...(config.openai_key.trim() ? { openai_key: config.openai_key.trim() } : {})
       };
 
       const response = await api.put('/api/config/ai', payload);
 
       if (response.data.success) {
-        toast.success('Configuração salva com sucesso!');
+        toast.success('Configuração OpenAI salva com sucesso!');
         
         // Limpar campo de chave após salvar
         setConfig(prev => ({ ...prev, openai_key: '' }));
         
         // Recarregar para atualizar preview
-        setTimeout(loadConfig, 1000);
-      }
-
-      // Salvar Google OAuth no perfil ativo (se existir)
-      if (activeProfileId) {
-        const hasAnyGoogle =
-          (googleOAuth.clientId && googleOAuth.clientId.trim()) ||
-          (googleOAuth.clientSecret && googleOAuth.clientSecret.trim()) ||
-          (googleOAuth.redirectUri && googleOAuth.redirectUri.trim());
-
-        if (hasAnyGoogle) {
-          const googlePayload = {
-            googleOAuthClientId: googleOAuth.clientId?.trim() || undefined,
-            googleOAuthClientSecret: googleOAuth.clientSecret?.trim() || undefined,
-            googleOAuthRedirectUri: googleOAuth.redirectUri?.trim() || undefined
-          };
-
-          const googleResp = await api.put(`/api/chatbot/profiles/${activeProfileId}`, googlePayload);
-          if (googleResp.data.success) {
-            toast.success('Credenciais do Google salvas no perfil ativo!');
-            setGoogleOAuth(prev => ({ ...prev, clientSecret: '' })); // nunca manter secret em memória
-            await loadActiveProfileAndGoogle();
-          }
-        }
-      } else {
-        const hasAnyGoogle =
-          (googleOAuth.clientId && googleOAuth.clientId.trim()) ||
-          (googleOAuth.clientSecret && googleOAuth.clientSecret.trim()) ||
-          (googleOAuth.redirectUri && googleOAuth.redirectUri.trim());
-        if (hasAnyGoogle) {
-          toast.error('Nenhum perfil ativo encontrado. Ative um perfil em Chatbot antes de salvar credenciais do Google.');
-        }
+        setTimeout(async () => {
+          await loadConfig();
+        }, 1000);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao salvar configuração');
       console.error(error);
     } finally {
-      setSaving(false);
+      setSavingOpenAI(false);
     }
   };
 
   const handleChange = (field, value) => {
     setConfig(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleGoogleChange = (field, value) => {
-    setGoogleOAuth(prev => ({ ...prev, [field]: value }));
   };
 
   if (loading) {
@@ -234,13 +167,16 @@ const APIManager = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chaves e Integrações</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Gerencie suas chaves de API e integrações (OpenAI, Google Agenda, etc.)
+            Gerencie suas chaves de API e integrações
           </p>
         </div>
 
         <Button
           variant="secondary"
-          onClick={loadConfig}
+          onClick={() => {
+            loadConfig();
+            loadSchedulerConfig();
+          }}
           className="flex items-center gap-2"
         >
           <RefreshCw size={20} />
@@ -262,10 +198,11 @@ const APIManager = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-6">
+      <div className="space-y-6">
         {/* Card OpenAI */}
         <Card title="OpenAI" icon={Key}>
-          <div className="space-y-4">
+          <form onSubmit={handleSaveOpenAI}>
+            <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 OpenAI API Key
@@ -356,7 +293,20 @@ const APIManager = () => {
                 Número máximo de tokens na resposta (50-2000)
               </p>
             </div>
-          </div>
+
+            {/* Botão Salvar OpenAI */}
+            <div className="flex justify-end pt-2">
+              <Button
+                type="submit"
+                variant="primary"
+                className="flex items-center gap-2"
+                disabled={savingOpenAI}
+              >
+                <Save size={18} />
+                {savingOpenAI ? 'Salvando...' : 'Salvar Configuração OpenAI'}
+              </Button>
+            </div>
+          </form>
         </Card>
 
         {/* Card Sistema de Agendamento (Premium Shears) */}
@@ -461,40 +411,22 @@ const APIManager = () => {
               </p>
             </div>
 
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleSaveScheduler}
-              disabled={saving || loadingScheduler}
-              className="w-full"
-            >
-              <Save size={18} />
-              {saving ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
-            </Button>
+            {/* Botão Salvar Scheduler */}
+            <div className="flex justify-end pt-2">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSaveScheduler}
+                disabled={savingScheduler || loadingScheduler}
+                className="flex items-center gap-2"
+              >
+                <Save size={18} />
+                {savingScheduler ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
+              </Button>
+            </div>
           </div>
         </Card>
-
-        {/* Save Button */}
-        <div className="flex justify-end gap-4">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={loadConfig}
-            disabled={saving}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            className="flex items-center gap-2"
-            disabled={saving}
-          >
-            <Save size={20} />
-            {saving ? 'Salvando...' : 'Salvar Configurações'}
-          </Button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 };
