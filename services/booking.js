@@ -1,50 +1,10 @@
 const premiumShearsScheduler = require('./premium-shears-scheduler');
-const appointmentNotifier = require('./appointment-notifier');
 const { query } = require('../config/database');
 const { supabase, isConfigured } = require('../config/supabase');
 
 // Cache de configurações de perfil para evitar múltiplas queries
 const profileConfigCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-
-// Cache de configuração do scheduler para evitar múltiplas queries
-const schedulerConfigCache = new Map();
-const SCHEDULER_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-
-/**
- * Busca configuração do scheduler e retorna o serviço correto
- * Agora usa apenas Premium Shears (Google Calendar removido)
- */
-async function getSchedulerService(userId) {
-  if (!userId) {
-    throw new Error('userId é obrigatório para usar Premium Shears Scheduler');
-  }
-
-  // Verificar cache
-  const cacheKey = String(userId);
-  const cached = schedulerConfigCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp) < SCHEDULER_CACHE_TTL) {
-    return cached.service;
-  }
-
-  try {
-    const isConfigured = await premiumShearsScheduler.isConfiguredForUser(userId);
-    if (!isConfigured) {
-      throw new Error('Premium Shears Scheduler não configurado. Configure em Chaves e Integrações → Sistema de Agendamento.');
-    }
-    
-    // Atualizar cache
-    schedulerConfigCache.set(cacheKey, {
-      service: premiumShearsScheduler,
-      timestamp: Date.now()
-    });
-
-    return premiumShearsScheduler;
-  } catch (error) {
-    console.warn('⚠️ [getSchedulerService] Erro ao verificar configuração:', error.message);
-    throw error;
-  }
-}
 
 function norm(s) {
   return String(s || '').trim();
@@ -212,6 +172,28 @@ class BookingService {
     return Number.isFinite(n) && n > 0 ? n : 30;
   }
 
+  /**
+   * Busca configuração do scheduler e retorna o serviço correto
+   * Agora usa apenas Premium Shears (Google Calendar removido)
+   */
+  async getSchedulerService(userId) {
+    if (!userId) {
+      throw new Error('userId é obrigatório para usar Premium Shears Scheduler');
+    }
+
+    try {
+      const isConfigured = await premiumShearsScheduler.isConfiguredForUser(userId);
+      if (!isConfigured) {
+        throw new Error('Premium Shears Scheduler não configurado. Configure em Chaves e Integrações → Sistema de Agendamento.');
+      }
+      
+      return premiumShearsScheduler;
+    } catch (error) {
+      console.warn('⚠️ [getSchedulerService] Erro ao verificar configuração:', error.message);
+      throw error;
+    }
+  }
+
   reset(phone) {
     this.state.delete(phone);
   }
@@ -374,10 +356,8 @@ class BookingService {
         let appt = null;
         let calendarError = null;
         
-        const calendarService = await getSchedulerService(userId);
-        const schedulerType = 'premium_shears';
-        
         try {
+          const calendarService = await this.getSchedulerService(userId);
           appt = await calendarService.createAppointment({
             userId,
             name: state.name || '',
@@ -389,15 +369,14 @@ class BookingService {
           });
           console.log(`✅ Agendamento criado no Premium Shears: ${appt.eventId || appt.id}`);
         } catch (err) {
-          console.error(`❌ Erro ao criar agendamento no Premium Shears:`, err.message);
+          console.error('❌ Erro ao criar agendamento no Premium Shears:', err.message);
           calendarError = err;
-          // Continuar para salvar no banco mesmo se falhar
+          // Continuar para salvar no banco mesmo se Premium Shears falhar
         }
 
-        // Salvar no banco de dados (mesmo se falhar)
-        let savedAppointmentId = null;
+        // Salvar no banco de dados (mesmo se Premium Shears falhar)
         try {
-          const savedAppt = await this.saveAppointmentToDatabase({
+          await this.saveAppointmentToDatabase({
             userId,
             profileId,
             phone: cleanPhone,
@@ -406,38 +385,12 @@ class BookingService {
             startTime: new Date(slot.startISO),
             endTime: new Date(new Date(slot.startISO).getTime() + duration * 60000),
             externalEventId: appt?.eventId || appt?.id || null,
-            schedulerType: schedulerType,
+            schedulerType: 'premium_shears',
             notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : null
           });
-          savedAppointmentId = savedAppt?.id || appt?.eventId || appt?.id;
         } catch (dbError) {
           console.error('❌ Erro ao salvar agendamento no banco de dados:', dbError);
           throw dbError; // Re-throw para que o fluxo pare aqui
-        }
-
-        // Enviar mensagem de confirmação com lista de agendamentos
-        try {
-          await appointmentNotifier.sendAppointmentConfirmation(cleanPhone, userId, savedAppointmentId);
-        } catch (notifyError) {
-          console.warn('⚠️ Erro ao enviar notificação WhatsApp:', notifyError.message);
-          // Não falhar o agendamento se a notificação falhar
-        }
-
-        // Se estiver usando Premium Shears, enviar notificação para a barbearia
-        if (schedulerType === 'premium_shears') {
-          try {
-            await appointmentNotifier.sendBarbershopNotification(userId, 'created', {
-              phone: cleanPhone,
-              client_name: state.name || '',
-              service: state.service || 'Agendamento',
-              start_time: new Date(slot.startISO),
-              end_time: new Date(new Date(slot.startISO).getTime() + duration * 60000),
-              notes: null
-            });
-          } catch (barbershopNotifyError) {
-            console.warn('⚠️ Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
-            // Não falhar o agendamento se a notificação falhar
-          }
         }
 
         this.reset(cleanPhone);
@@ -523,11 +476,9 @@ class BookingService {
       };
     }
 
-    const calendarService = await getSchedulerService(userId);
-    const schedulerType = 'premium_shears'; // Agora usa apenas Premium Shears
-    
     let isFree = false;
     try {
+      const calendarService = await this.getSchedulerService(userId);
       isFree = await calendarService.isSlotFree({ 
         userId, 
         startISO: desired.toISOString(), 
@@ -535,10 +486,10 @@ class BookingService {
         intervalMinutes: state.profileConfig?.intervalBetweenAppointmentsMinutes || 0
       });
     } catch (e) {
-      // Caso comum: usuário não conectou ou não configurou sistema de agendamento
+      // Caso comum: Premium Shears não configurado
       return {
         handled: true,
-        reply: `Para eu consultar horários e agendar, você precisa **configurar o Premium Shears Scheduler** no app (Chaves e Integrações → Sistema de Agendamento).\n\nDepois disso, me diga novamente: qual dia e horário você quer?`
+        reply: `Para eu consultar horários e agendar, você precisa **configurar o Sistema de Agendamento** em Chaves e Integrações.\n\nDepois disso, me diga novamente: qual dia e horário você quer?`
       };
     }
     if (isFree) {
@@ -546,6 +497,7 @@ class BookingService {
       let calendarError = null;
       
       try {
+        const calendarService = await this.getSchedulerService(userId);
         appt = await calendarService.createAppointment({
           userId,
           name: state.name,
@@ -556,17 +508,16 @@ class BookingService {
           intervalMinutes: state.profileConfig?.intervalBetweenAppointmentsMinutes || 0,
           notes: ''
         });
-        console.log(`✅ Agendamento criado no scheduler: ${appt.eventId || appt.id}`);
+        console.log(`✅ Agendamento criado no Premium Shears: ${appt.eventId || appt.id}`);
       } catch (err) {
-        console.error('❌ Erro ao criar agendamento no scheduler:', err.message);
+        console.error('❌ Erro ao criar agendamento no Premium Shears:', err.message);
         calendarError = err;
-        // Continuar para salvar no banco mesmo se scheduler falhar
+        // Continuar para salvar no banco mesmo se Premium Shears falhar
       }
       
-      // Salvar no banco de dados (mesmo se falhar)
-      let savedAppointmentId = null;
+      // Salvar no banco de dados (mesmo se Premium Shears falhar)
       try {
-        const savedAppt = await this.saveAppointmentToDatabase({
+        await this.saveAppointmentToDatabase({
           userId,
           profileId,
           phone: cleanPhone,
@@ -575,38 +526,12 @@ class BookingService {
           startTime: desired,
           endTime: new Date(desired.getTime() + duration * 60000),
           externalEventId: appt?.eventId || appt?.id || null,
-          schedulerType: schedulerType,
+          schedulerType: 'premium_shears',
           notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : null
         });
-        savedAppointmentId = savedAppt?.id || appt?.eventId || appt?.id;
       } catch (dbError) {
         console.error('❌ Erro ao salvar agendamento no banco de dados:', dbError);
         throw dbError; // Re-throw para que o fluxo pare aqui
-      }
-
-      // Enviar mensagem de confirmação com lista de agendamentos
-      try {
-        await appointmentNotifier.sendAppointmentConfirmation(cleanPhone, userId, savedAppointmentId);
-      } catch (notifyError) {
-        console.warn('⚠️ Erro ao enviar notificação WhatsApp:', notifyError.message);
-        // Não falhar o agendamento se a notificação falhar
-      }
-
-      // Se estiver usando Premium Shears, enviar notificação para a barbearia
-      if (schedulerType === 'premium_shears') {
-        try {
-          await appointmentNotifier.sendBarbershopNotification(userId, 'created', {
-            phone: cleanPhone,
-            client_name: state.name,
-            service: state.service,
-            start_time: desired,
-            end_time: new Date(desired.getTime() + duration * 60000),
-            notes: null
-          });
-        } catch (barbershopNotifyError) {
-          console.warn('⚠️ Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
-          // Não falhar o agendamento se a notificação falhar
-        }
       }
       
       const when = formatHuman(desired);
@@ -618,12 +543,10 @@ class BookingService {
     }
 
     // sugerir 3 opções do dia
-    const calendarService = await getSchedulerService(userId);
-    const schedulerType = 'premium_shears'; // Agora usa apenas Premium Shears
-    
     const { start, end } = getOpenClose(state.dateOnly);
     let slots = [];
     try {
+      const calendarService = await this.getSchedulerService(userId);
       slots = await calendarService.getAvailableSlots({
         userId,
         fromISO: start.toISOString(),
@@ -634,7 +557,7 @@ class BookingService {
     } catch (e) {
       return {
         handled: true,
-        reply: `Para eu sugerir horários disponíveis, você precisa **configurar o Premium Shears Scheduler** no app (Chaves e Integrações → Sistema de Agendamento).\n\nQuer que eu te diga onde fica essa opção no painel?`
+        reply: `Para eu sugerir horários disponíveis, você precisa **configurar o Sistema de Agendamento** em Chaves e Integrações.\n\nQuer que eu te diga onde fica essa opção no painel?`
       };
     }
 
@@ -714,12 +637,7 @@ class BookingService {
         duration
       });
 
-      // Buscar serviço de agendamento (Premium Shears)
-      const calendarService = await getSchedulerService(userId);
-      const schedulerType = 'premium_shears';
-      console.log(`📅 [createAppointmentFromAI] Usando serviço: ${schedulerType}`);
-
-      // Criar evento no sistema de agendamento
+      // Criar evento no Premium Shears
       // Se o horário solicitado estiver ocupado, tentar horários alternativos automaticamente
       let appt = null;
       let calendarError = null;
@@ -732,6 +650,7 @@ class BookingService {
 
       try {
         console.log(`📅 [createAppointmentFromAI] Tentando criar agendamento no horário solicitado...`);
+        const calendarService = await this.getSchedulerService(userId);
         appt = await calendarService.createAppointment({
           userId,
           name: clientName,
@@ -815,6 +734,7 @@ class BookingService {
             try {
               attemptsCount++;
               console.log(`🔄 [createAppointmentFromAI] Tentativa ${attemptsCount}/${alternativeOffsets.length}: ${alternativeTime.toLocaleString('pt-BR')}...`);
+              const calendarService = await this.getSchedulerService(userId);
               appt = await calendarService.createAppointment({
                 userId,
                 name: clientName,
@@ -881,7 +801,7 @@ class BookingService {
       try {
         const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
         const duplicateCheck = await query(
-          `SELECT id, external_event_id, scheduler_type, start_time, status
+          `SELECT id, external_event_id, start_time, status
            FROM booking_appointments
            WHERE user_id = $1 
              AND phone = $2 
@@ -894,22 +814,18 @@ class BookingService {
 
         if (duplicateCheck.rows.length > 0) {
           const duplicate = duplicateCheck.rows[0];
-          const duplicateEventId = duplicate.external_event_id;
-          const duplicateSchedulerType = duplicate.scheduler_type || 'premium_shears';
-          
           console.log(`⚠️ [createAppointmentFromAI] Agendamento duplicado detectado:`, {
             duplicateId: duplicate.id,
-            existingEventId: duplicateEventId?.substring(0, 30),
-            schedulerType: duplicateSchedulerType,
+            existingEventId: duplicate.external_event_id?.substring(0, 30),
             existingTime: new Date(duplicate.start_time).toLocaleString('pt-BR'),
             newTime: finalStartTime.toLocaleString('pt-BR')
           });
 
-          // Se o novo agendamento foi criado, cancelar o anterior no sistema de agendamento
-          if (appt && appt.eventId && duplicateEventId) {
+          // Se o novo agendamento foi criado no Premium Shears, cancelar o anterior
+          if (appt && appt.eventId && duplicate.external_event_id) {
             try {
-              const calendarService = await getSchedulerService(userId);
-              await calendarService.deleteAppointment({ userId, eventId: duplicateEventId });
+              const calendarService = await this.getSchedulerService(userId);
+              await calendarService.deleteAppointment({ userId, eventId: duplicate.external_event_id });
               console.log(`✅ [createAppointmentFromAI] Agendamento anterior cancelado no Premium Shears`);
             } catch (delError) {
               console.warn(`⚠️ [createAppointmentFromAI] Erro ao cancelar agendamento anterior:`, delError.message);
@@ -947,7 +863,7 @@ class BookingService {
           hasCalendarError: !!calendarError
         });
         
-        const savedAppt = await this.saveAppointmentToDatabase({
+        await this.saveAppointmentToDatabase({
           userId,
           profileId,
           phone: cleanPhone,
@@ -962,36 +878,8 @@ class BookingService {
         
         console.log(`✅ [createAppointmentFromAI] Agendamento salvo no banco de dados`, {
           savedWithEventId: !!eventIdToSave,
-          eventId: eventIdToSave?.substring(0, 30),
-          schedulerType
+          eventId: eventIdToSave?.substring(0, 30)
         });
-
-        // Enviar mensagem de confirmação com lista de agendamentos
-        try {
-          const appointmentId = savedAppt?.id || eventIdToSave;
-          await appointmentNotifier.sendAppointmentConfirmation(cleanPhone, userId, appointmentId);
-          console.log(`✅ [createAppointmentFromAI] Notificação WhatsApp enviada`);
-        } catch (notifyError) {
-          console.warn('⚠️ [createAppointmentFromAI] Erro ao enviar notificação WhatsApp:', notifyError.message);
-          // Não falhar o agendamento se a notificação falhar
-        }
-
-        // Se estiver usando Premium Shears, enviar notificação para a barbearia
-        if (schedulerType === 'premium_shears') {
-          try {
-            await appointmentNotifier.sendBarbershopNotification(userId, 'created', {
-              phone: cleanPhone,
-              client_name: clientName,
-              service: service,
-              start_time: finalStartTime,
-              end_time: finalEndTime,
-              notes: notes || null
-            });
-          } catch (barbershopNotifyError) {
-            console.warn('⚠️ [createAppointmentFromAI] Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
-            // Não falhar o agendamento se a notificação falhar
-          }
-        }
       } catch (dbError) {
         console.error('❌ [createAppointmentFromAI] Erro ao salvar agendamento no banco de dados:', {
           message: dbError.message,
@@ -1000,11 +888,11 @@ class BookingService {
         });
         
         // Se o evento foi criado no Premium Shears mas falhou ao salvar no banco,
-        // isso é crítico - o evento ficará órfão no calendário
+        // isso é crítico - o evento ficará órfão no sistema
         if (eventIdToSave) {
           console.error('⚠️ [createAppointmentFromAI] ATENÇÃO: Evento criado no Premium Shears mas não salvo no banco!');
           console.error('   EventId:', eventIdToSave);
-          console.error('   Isso pode causar inconsistência entre calendário e banco de dados.');
+          console.error('   Isso pode causar inconsistência entre sistema e banco de dados.');
         }
         
         return { success: false, error: `Erro ao salvar agendamento no banco de dados: ${dbError.message}` };
@@ -1068,7 +956,7 @@ class BookingService {
 
       // Buscar agendamentos futuros do cliente
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, external_event_id, scheduler_type
+        `SELECT id, client_name, service, start_time, end_time, status, external_event_id
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW()
          ORDER BY start_time ASC
@@ -1135,7 +1023,7 @@ class BookingService {
 
       // Buscar agendamentos futuros primeiro
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, external_event_id, scheduler_type, external_event_id, scheduler_type
+        `SELECT id, client_name, service, start_time, end_time, status, external_event_id
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW() AND status = 'confirmed'
          ORDER BY start_time ASC
@@ -1195,24 +1083,22 @@ class BookingService {
       const appointment = result.rows[appointmentIndex];
       const appointmentId = appointment.id;
       const eventId = appointment.external_event_id;
-      const schedulerType = appointment.scheduler_type || 'premium_shears';
 
       console.log(`🗑️ [handleCancelAppointment] Cancelando agendamento:`, {
         appointmentId,
         eventId: eventId?.substring(0, 50),
-        schedulerType,
         service: appointment.service
       });
 
-      // Deletar do sistema de agendamento se tiver eventId
+      // Deletar do Premium Shears se tiver eventId
       if (eventId) {
         try {
-          // Deletar do Premium Shears
-          await premiumShearsScheduler.deleteAppointment({ userId, eventId });
+          const calendarService = await this.getSchedulerService(userId);
+          await calendarService.deleteAppointment({ userId, eventId });
           console.log(`✅ [handleCancelAppointment] Evento deletado do Premium Shears`);
         } catch (calendarError) {
-          console.error(`⚠️ [handleCancelAppointment] Erro ao deletar do Premium Shears:`, calendarError.message);
-          // Continuar mesmo se falhar
+          console.error('⚠️ [handleCancelAppointment] Erro ao deletar do Premium Shears:', calendarError.message);
+          // Continuar mesmo se falhar no Premium Shears
         }
       }
 
@@ -1228,24 +1114,6 @@ class BookingService {
       } catch (dbError) {
         console.error('❌ [handleCancelAppointment] Erro ao atualizar no banco:', dbError);
         throw dbError;
-      }
-
-      // Se estiver usando Premium Shears, enviar notificação para a barbearia
-      // schedulerType já foi buscado acima junto com os dados do agendamento
-      if (schedulerType === 'premium_shears') {
-        try {
-          await appointmentNotifier.sendBarbershopNotification(userId, 'cancelled', {
-            phone: appointment.phone,
-            client_name: appointment.client_name,
-            service: appointment.service,
-            start_time: appointment.start_time,
-            end_time: appointment.end_time,
-            notes: null
-          });
-        } catch (barbershopNotifyError) {
-          console.warn('⚠️ [handleCancelAppointment] Erro ao enviar notificação para barbearia:', barbershopNotifyError.message);
-          // Não falhar o cancelamento se a notificação falhar
-        }
       }
 
       const start = new Date(appointment.start_time);
@@ -1284,7 +1152,7 @@ class BookingService {
 
       // Buscar agendamentos futuros
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, external_event_id, scheduler_type, external_event_id, scheduler_type
+        `SELECT id, client_name, service, start_time, end_time, status, external_event_id
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW() AND status = 'confirmed'
          ORDER BY start_time ASC
@@ -1329,8 +1197,8 @@ class BookingService {
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
           status: 'confirmed',
-          notes: notes || null,
-          scheduler_type: schedulerType
+          scheduler_type: schedulerType,
+          notes: notes || null
         };
 
         // Adicionar ID externo
@@ -1338,15 +1206,13 @@ class BookingService {
           insertData.external_event_id = String(externalEventId);
         }
 
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('booking_appointments')
-          .insert([insertData])
-          .select('id')
-          .single();
+          .insert([insertData]);
 
-        if (!error && data) {
+        if (!error) {
           console.log(`✅ Agendamento salvo no Supabase: ${cleanPhone} - ${service} - ${startTime.toISOString()}`);
-          return { id: data.id };
+          return;
         } else {
           console.warn('⚠️  Erro ao salvar agendamento no Supabase:', error);
           // Continuar para tentar PostgreSQL
@@ -1354,13 +1220,12 @@ class BookingService {
       }
 
       // Fallback: PostgreSQL local
-      const result = await query(
+      await query(
         `INSERT INTO booking_appointments (
           user_id, profile_id, phone, client_name, service,
           start_time, end_time, status, external_event_id, scheduler_type, notes,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        RETURNING id`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [
           userId,
           profileId || null,
@@ -1376,7 +1241,6 @@ class BookingService {
         ]
       );
       console.log(`✅ Agendamento salvo no PostgreSQL: ${cleanPhone} - ${service} - ${startTime.toISOString()}`);
-      return { id: result.rows[0]?.id };
     } catch (error) {
       console.error('❌ Erro ao salvar agendamento no banco de dados:', error);
       throw error;
