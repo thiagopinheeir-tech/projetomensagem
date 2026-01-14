@@ -3,24 +3,39 @@ import toast from 'react-hot-toast';
 
 // Obter URL da API e validar
 const getApiUrl = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  
+  // Validar se a variável não está vazia ou inválida
+  if (!apiUrl || apiUrl === 'undefined' || apiUrl === 'null' || apiUrl.trim() === '') {
+    console.warn('⚠️ VITE_API_URL não está configurada ou é inválida, usando localhost');
+    apiUrl = 'http://localhost:5000';
+  }
   
   // Validar URL (remover espaços e caracteres inválidos no início)
   let cleanUrl = apiUrl.trim();
   
   // Remover underscore ou outros caracteres inválidos no início
   if (cleanUrl.startsWith('_') || cleanUrl.startsWith(' ')) {
-    // URL do backend tinha caracteres inválidos, removidos automaticamente
+    console.warn('⚠️ URL do backend tem caracteres inválidos no início:', apiUrl);
     cleanUrl = cleanUrl.replace(/^[_\s]+/, '');
   }
   
   // Garantir que começa com http:// ou https://
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-    // URL do backend não tinha protocolo, adicionado https:// automaticamente
+    console.warn('⚠️ URL do backend não começa com http:// ou https://:', apiUrl);
     cleanUrl = `https://${cleanUrl}`;
   }
   
-  // API URL configurada e validada
+  // Validar se a URL é válida usando try/catch
+  try {
+    new URL(cleanUrl);
+  } catch (error) {
+    console.error('❌ URL do backend inválida:', cleanUrl);
+    console.warn('⚠️ Usando localhost como fallback');
+    cleanUrl = 'http://localhost:5000';
+  }
+  
+  console.log('🔗 API URL configurada:', cleanUrl);
   
   return cleanUrl;
 };
