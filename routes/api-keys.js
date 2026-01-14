@@ -9,6 +9,7 @@ const { requireUserId } = require('../middleware/data-isolation');
 const { query } = require('../config/database');
 const encryption = require('../services/encryption');
 const { convertUserIdForTable } = require('../utils/userId-converter');
+const OpenAI = require('openai');
 
 /**
  * GET /api/api-keys
@@ -49,15 +50,9 @@ router.get('/', authMiddleware, requireUserId, async (req, res, next) => {
  */
 router.get('/:provider', authMiddleware, requireUserId, async (req, res, next) => {
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/api-keys.js:48',message:'GET /:provider ENTRY',data:{userId:req.userId,provider:req.params.provider},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F4'})}).catch(()=>{});
-    // #endregion
     let userId = req.userId;
     // Converter userId para o tipo correto da tabela user_api_keys
     userId = await convertUserIdForTable('user_api_keys', userId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/api-keys.js:53',message:'GET /:provider userId converted',data:{convertedUserId:userId,convertedType:typeof userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F4'})}).catch(()=>{});
-    // #endregion
     const provider = req.params.provider.toLowerCase();
 
     const result = await query(
@@ -67,9 +62,6 @@ router.get('/:provider', authMiddleware, requireUserId, async (req, res, next) =
        LIMIT 1`,
       [userId, provider]
     );
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/api-keys.js:60',message:'GET /:provider EXIT',data:{rowsCount:result.rows.length,configured:result.rows.length>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F4'})}).catch(()=>{});
-    // #endregion
 
     res.json({
       success: true,
@@ -77,9 +69,6 @@ router.get('/:provider', authMiddleware, requireUserId, async (req, res, next) =
       provider: provider
     });
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/193afe74-fa18-4a91-92da-dc9b7118deab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'routes/api-keys.js:69',message:'GET /:provider ERROR',data:{errorMessage:error.message,errorStack:error.stack,errorCode:error.code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F4'})}).catch(()=>{});
-    // #endregion
     console.error('❌ Erro em GET /api/api-keys/:provider:', error);
     next(error);
   }
@@ -168,6 +157,78 @@ router.post('/', authMiddleware, requireUserId, async (req, res, next) => {
     });
   } catch (error) {
     console.error('❌ Erro ao salvar API key:', error);
+    next(error);
+  }
+});
+
+/**
+ * POST /api/api-keys/:provider/verify
+ * Verifica se uma API key está funcionando (faz teste real)
+ */
+router.post('/:provider/verify', authMiddleware, requireUserId, async (req, res, next) => {
+  try {
+    let userId = req.userId;
+    userId = await convertUserIdForTable('user_api_keys', userId);
+    const provider = req.params.provider.toLowerCase();
+
+    if (provider !== 'openai') {
+      return res.status(400).json({
+        success: false,
+        message: 'Verificação disponível apenas para OpenAI'
+      });
+    }
+
+    // Buscar API key
+    const result = await query(
+      `SELECT api_key_encrypted FROM user_api_keys
+       WHERE user_id = $1 AND provider = $2 AND is_active = true
+       LIMIT 1`,
+      [userId, provider]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: false,
+        valid: false,
+        message: 'API key não configurada'
+      });
+    }
+
+    // Descriptografar
+    const decryptedKey = encryption.decrypt(result.rows[0].api_key_encrypted);
+
+    // Testar API key fazendo uma requisição simples
+    try {
+      const openai = new OpenAI({ apiKey: decryptedKey });
+      const testResponse = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: 'Test' }],
+        max_tokens: 5
+      });
+
+      if (testResponse && testResponse.choices && testResponse.choices.length > 0) {
+        return res.json({
+          success: true,
+          valid: true,
+          message: 'API key válida e funcionando'
+        });
+      } else {
+        return res.json({
+          success: false,
+          valid: false,
+          message: 'Resposta inválida da API'
+        });
+      }
+    } catch (apiError) {
+      return res.json({
+        success: false,
+        valid: false,
+        message: apiError.message || 'Erro ao testar API key',
+        error: apiError.response?.status || apiError.status || 'unknown'
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erro ao verificar API key:', error);
     next(error);
   }
 });

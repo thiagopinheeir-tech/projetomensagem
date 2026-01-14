@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Key, Save, AlertCircle, Eye, EyeOff, RefreshCw, Calendar, XCircle } from 'lucide-react';
+import { Key, Save, AlertCircle, Eye, EyeOff, RefreshCw, Calendar, CheckCircle, XCircle } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -9,29 +9,23 @@ import toast from 'react-hot-toast';
 
 const APIManager = () => {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingOpenAI, setSavingOpenAI] = useState(false);
+  const [savingScheduler, setSavingScheduler] = useState(false);
+  const [verifyingOpenAI, setVerifyingOpenAI] = useState(false);
   const [showKey, setShowKey] = useState(false);
-  const [showGoogleSecret, setShowGoogleSecret] = useState(false);
+  
   const [config, setConfig] = useState({
     openai_key: '',
     model: 'gpt-4o-mini',
     temperature: 0.7,
     max_tokens: 300,
-    // Prompt do chatbot é gerenciado por Perfil/ChatbotSettings.
   });
   const [keyPreview, setKeyPreview] = useState('');
-
-  const [activeProfileId, setActiveProfileId] = useState('');
-  const [googleOAuth, setGoogleOAuth] = useState({
-    clientId: '',
-    clientSecret: '',
-    redirectUri: ''
+  const [openAIStatus, setOpenAIStatus] = useState({
+    configured: false,
+    valid: null, // null = não verificado, true = válida, false = inválida
+    message: ''
   });
-
-  const [googleStatus, setGoogleStatus] = useState({ connected: false, calendarIdDefault: null });
-  const [googleCalendars, setGoogleCalendars] = useState([]);
-  const [selectedCalendarId, setSelectedCalendarId] = useState('');
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
   
   const [premiumShearsConfig, setPremiumShearsConfig] = useState({
     api_url: '',
@@ -43,12 +37,23 @@ const APIManager = () => {
   });
   const [showPremiumShearsKey, setShowPremiumShearsKey] = useState(false);
   const [loadingScheduler, setLoadingScheduler] = useState(false);
+  const [schedulerStatus, setSchedulerStatus] = useState({
+    configured: false,
+    message: ''
+  });
 
   useEffect(() => {
     (async () => {
-      await Promise.allSettled([loadConfig(), loadActiveProfileAndGoogle(), loadGoogleStatus(), loadSchedulerConfig()]);
+      await Promise.allSettled([loadConfig(), loadSchedulerConfig()]);
     })();
   }, []);
+
+  // Verificar status da API OpenAI ao carregar
+  useEffect(() => {
+    if (keyPreview) {
+      verifyOpenAIKey();
+    }
+  }, [keyPreview]);
 
   const loadConfig = async () => {
     try {
@@ -64,6 +69,10 @@ const APIManager = () => {
           max_tokens: cfg.max_tokens || 300
         });
         setKeyPreview(cfg.key_preview || '');
+        setOpenAIStatus(prev => ({
+          ...prev,
+          configured: !!cfg.key_preview
+        }));
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
@@ -73,129 +82,47 @@ const APIManager = () => {
     }
   };
 
-  const loadActiveProfileAndGoogle = async () => {
-    try {
-      const profilesResp = await api.get('/api/chatbot/profiles');
-      const list = profilesResp.data?.profiles || [];
-      const active = list.find(p => p.is_active);
-      if (!active?.id) {
-        setActiveProfileId('');
-        return;
-      }
-      setActiveProfileId(active.id);
-
-      const profileResp = await api.get(`/api/chatbot/profiles/${active.id}`);
-      const p = profileResp.data?.profile;
-      if (profileResp.data?.success && p) {
-        setGoogleOAuth(prev => ({
-          ...prev,
-          clientId: p.google_oauth_client_id || '',
-          redirectUri: p.google_oauth_redirect_uri || ''
-          // secret nunca volta do backend; usuário redefine se quiser
-        }));
-      }
-    } catch (error) {
-      // silencioso: não travar a tela de API se chatbot/perfis não estiverem prontos
-      console.warn('Erro ao carregar perfil ativo/Google OAuth:', error?.response?.data || error);
+  const verifyOpenAIKey = async () => {
+    if (!keyPreview) {
+      setOpenAIStatus({
+        configured: false,
+        valid: null,
+        message: 'API key não configurada'
+      });
+      return;
     }
-  };
 
-  const loadGoogleStatus = async () => {
     try {
-      const resp = await api.get('/api/google/status');
-      if (resp.data.success) {
-        setGoogleStatus({
-          connected: !!resp.data.connected,
-          calendarIdDefault: resp.data.calendarIdDefault || null
+      setVerifyingOpenAI(true);
+      const response = await api.post('/api/api-keys/openai/verify');
+
+      if (response.data.success) {
+        setOpenAIStatus({
+          configured: true,
+          valid: response.data.valid,
+          message: response.data.message || (response.data.valid ? 'API key válida e funcionando' : 'API key inválida')
         });
-        setSelectedCalendarId(resp.data.calendarIdDefault || '');
+      } else {
+        setOpenAIStatus({
+          configured: true,
+          valid: false,
+          message: response.data.message || 'Erro ao verificar API key'
+        });
       }
-    } catch (e) {
-      console.warn('Google status error:', e?.response?.data || e);
-    }
-  };
-
-  const handleConnectGoogle = async () => {
-    try {
-      setLoadingGoogle(true);
-      if (!activeProfileId) {
-        toast.error('Ative um perfil em Chatbot antes de conectar o Google.');
-        return;
-      }
-      const resp = await api.get('/api/google/oauth/start');
-      const url = resp.data?.url;
-      if (!url) throw new Error('URL OAuth não retornada');
-      window.open(url, '_blank', 'noopener,noreferrer');
-      toast.success('Conclua a conexão na aba do Google e depois clique em “Atualizar status”.');
-    } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Erro ao iniciar conexão com Google';
-      toast.error(msg);
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
-
-  const handleLoadCalendars = async () => {
-    try {
-      setLoadingGoogle(true);
-      const resp = await api.get('/api/google/calendars');
-      if (resp.data.success) {
-        setGoogleCalendars(resp.data.calendars || []);
-        setSelectedCalendarId(resp.data.selected || selectedCalendarId || '');
-      }
-    } catch (e) {
-      const msg = e.response?.data?.message || 'Erro ao listar calendários';
-      toast.error(msg);
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
-
-  const handleSelectCalendar = async () => {
-    if (!selectedCalendarId) {
-      toast.error('Selecione um calendário');
-      return;
-    }
-    try {
-      setLoadingGoogle(true);
-      const resp = await api.post('/api/google/calendar/select', { calendarId: selectedCalendarId });
-      if (resp.data.success) {
-        toast.success('Calendário selecionado!');
-        await loadGoogleStatus();
-      }
-    } catch (e) {
-      const msg = e.response?.data?.message || 'Erro ao selecionar calendário';
-      toast.error(msg);
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    if (!confirm('Tem certeza que deseja remover as credenciais do Google? Você precisará conectar novamente para usar o Google Calendar.')) {
-      return;
-    }
-
-    setLoadingGoogle(true);
-    try {
-      await api.delete('/api/google/disconnect');
-      toast.success('Credenciais do Google removidas com sucesso!');
-      setGoogleStatus({ connected: false, calendarIdDefault: null });
-      setGoogleCalendars([]);
-      setSelectedCalendarId('');
-      // Recarregar status após remover
-      await loadGoogleStatus();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Erro ao remover credenciais do Google');
-      console.error(error);
+      setOpenAIStatus({
+        configured: true,
+        valid: false,
+        message: error.response?.data?.message || 'Erro ao verificar API key'
+      });
     } finally {
-      setLoadingGoogle(false);
+      setVerifyingOpenAI(false);
     }
   };
 
-  const handleSave = async (e) => {
+  const handleSaveOpenAI = async (e) => {
     e.preventDefault();
-    setSaving(true);
+    setSavingOpenAI(true);
 
     try {
       const payload = {
@@ -212,54 +139,22 @@ const APIManager = () => {
         // Limpar campo de chave após salvar
         setConfig(prev => ({ ...prev, openai_key: '' }));
         
-        // Recarregar para atualizar preview
-        setTimeout(loadConfig, 1000);
-      }
-
-      // Salvar Google OAuth no perfil ativo (se existir)
-      if (activeProfileId) {
-        const hasAnyGoogle =
-          (googleOAuth.clientId && googleOAuth.clientId.trim()) ||
-          (googleOAuth.clientSecret && googleOAuth.clientSecret.trim()) ||
-          (googleOAuth.redirectUri && googleOAuth.redirectUri.trim());
-
-        if (hasAnyGoogle) {
-          const googlePayload = {
-            googleOAuthClientId: googleOAuth.clientId?.trim() || undefined,
-            googleOAuthClientSecret: googleOAuth.clientSecret?.trim() || undefined,
-            googleOAuthRedirectUri: googleOAuth.redirectUri?.trim() || undefined
-          };
-
-          const googleResp = await api.put(`/api/chatbot/profiles/${activeProfileId}`, googlePayload);
-          if (googleResp.data.success) {
-            toast.success('Credenciais do Google salvas no perfil ativo!');
-            setGoogleOAuth(prev => ({ ...prev, clientSecret: '' })); // nunca manter secret em memória
-            await loadActiveProfileAndGoogle();
-          }
-        }
-      } else {
-        const hasAnyGoogle =
-          (googleOAuth.clientId && googleOAuth.clientId.trim()) ||
-          (googleOAuth.clientSecret && googleOAuth.clientSecret.trim()) ||
-          (googleOAuth.redirectUri && googleOAuth.redirectUri.trim());
-        if (hasAnyGoogle) {
-          toast.error('Nenhum perfil ativo encontrado. Ative um perfil em Chatbot antes de salvar credenciais do Google.');
-        }
+        // Recarregar para atualizar preview e verificar
+        setTimeout(async () => {
+          await loadConfig();
+          await verifyOpenAIKey();
+        }, 1000);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao salvar configuração');
       console.error(error);
     } finally {
-      setSaving(false);
+      setSavingOpenAI(false);
     }
   };
 
   const handleChange = (field, value) => {
     setConfig(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleGoogleChange = (field, value) => {
-    setGoogleOAuth(prev => ({ ...prev, [field]: value }));
   };
 
   const loadSchedulerConfig = async () => {
@@ -277,6 +172,11 @@ const APIManager = () => {
           has_key: cfg.has_key || false,
           barbearia_phone: cfg.barbearia_phone || ''
         });
+        
+        setSchedulerStatus({
+          configured: !!(cfg.api_url || cfg.has_key),
+          message: cfg.api_url ? 'Configuração do scheduler encontrada' : 'Scheduler não configurado'
+        });
       }
     } catch (error) {
       console.error('Erro ao carregar configuração do scheduler:', error);
@@ -288,7 +188,7 @@ const APIManager = () => {
 
   const handleSaveScheduler = async () => {
     try {
-      setSaving(true);
+      setSavingScheduler(true);
       const payload = {
         api_url: premiumShearsConfig.api_url?.trim() || null,
         api_key: premiumShearsConfig.api_key?.trim() || null,
@@ -301,13 +201,15 @@ const APIManager = () => {
       if (response.data.success) {
         toast.success('Configuração do scheduler salva com sucesso!');
         setPremiumShearsConfig(prev => ({ ...prev, api_key: '' }));
-        setTimeout(loadSchedulerConfig, 1000);
+        setTimeout(async () => {
+          await loadSchedulerConfig();
+        }, 1000);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao salvar configuração do scheduler');
       console.error(error);
     } finally {
-      setSaving(false);
+      setSavingScheduler(false);
     }
   };
 
@@ -329,13 +231,16 @@ const APIManager = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Chaves e Integrações</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Gerencie suas chaves de API e integrações (OpenAI, Google Agenda, etc.)
+            Gerencie suas chaves de API e integrações
           </p>
         </div>
 
         <Button
           variant="secondary"
-          onClick={loadConfig}
+          onClick={() => {
+            loadConfig();
+            loadSchedulerConfig();
+          }}
           className="flex items-center gap-2"
         >
           <RefreshCw size={20} />
@@ -357,236 +262,151 @@ const APIManager = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-6">
+      <div className="space-y-6">
         {/* Card OpenAI */}
         <Card title="OpenAI" icon={Key}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                OpenAI API Key
-              </label>
-              
-              {keyPreview && !config.openai_key && (
-                <div className="mb-2">
-                  <Badge variant="success" className="flex items-center gap-2 w-fit">
-                    <Key size={14} />
-                    Chave configurada: {keyPreview}
-                  </Badge>
+          <form onSubmit={handleSaveOpenAI}>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  OpenAI API Key
+                </label>
+                
+                {/* Status da API Key */}
+                {keyPreview && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <Badge 
+                      variant={openAIStatus.valid === true ? 'success' : openAIStatus.valid === false ? 'danger' : 'default'} 
+                      className="flex items-center gap-2 w-fit"
+                    >
+                      {openAIStatus.valid === true && <CheckCircle size={14} />}
+                      {openAIStatus.valid === false && <XCircle size={14} />}
+                      {openAIStatus.valid === null && <Key size={14} />}
+                      {openAIStatus.valid === true 
+                        ? 'API Key válida e funcionando' 
+                        : openAIStatus.valid === false 
+                        ? `API Key inválida: ${openAIStatus.message}`
+                        : verifyingOpenAI
+                        ? 'Verificando...'
+                        : `Chave configurada: ${keyPreview}`}
+                    </Badge>
+                    {keyPreview && !verifyingOpenAI && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={verifyOpenAIKey}
+                        className="flex items-center gap-1"
+                      >
+                        <RefreshCw size={14} />
+                        Verificar
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div className="relative">
+                  <Input
+                    type={showKey ? 'text' : 'password'}
+                    value={config.openai_key}
+                    onChange={(e) => handleChange('openai_key', e.target.value)}
+                    placeholder={keyPreview ? 'Deixe em branco para manter a chave atual' : 'sk-proj-...'}
+                    icon={Key}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
                 </div>
-              )}
 
-              <div className="relative">
-                <Input
-                  type={showKey ? 'text' : 'password'}
-                  value={config.openai_key}
-                  onChange={(e) => handleChange('openai_key', e.target.value)}
-                  placeholder={keyPreview ? 'Deixe em branco para manter a chave atual' : 'sk-proj-...'}
-                  icon={Key}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Deixe em branco para manter a chave atual. 
-                Nova chave: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Obter em platform.openai.com</a>
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Modelo GPT
-                </label>
-                <select
-                  value={config.model}
-                  onChange={(e) => handleChange('model', e.target.value)}
-                  className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="gpt-4o-mini">GPT-4o Mini (Rápido e Econômico)</option>
-                  <option value="gpt-4o">GPT-4o (Mais Capaz)</option>
-                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Temperatura ({config.temperature})
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={config.temperature}
-                  onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
-                  className="w-full"
-                />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  0 = Focado e Determinístico | 1 = Criativo e Variado
+                  Deixe em branco para manter a chave atual. 
+                  Nova chave: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Obter em platform.openai.com</a>
                 </p>
               </div>
-            </div>
 
-            <div>
-              <Input
-                label="Máximo de Tokens"
-                type="number"
-                value={config.max_tokens}
-                onChange={(e) => handleChange('max_tokens', parseInt(e.target.value))}
-                min={50}
-                max={2000}
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Número máximo de tokens na resposta (50-2000)
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Card Google */}
-        <Card title="Google" icon={Calendar}>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Essas credenciais serão salvas no <span className="font-medium">perfil ativo</span> do Chatbot. Perfil ativo detectado: {activeProfileId ? activeProfileId : '(nenhum)'}.
-            </p>
-
-            <Input
-              label="Google OAuth Client ID"
-              value={googleOAuth.clientId}
-              onChange={(e) => handleGoogleChange('clientId', e.target.value)}
-              placeholder="Seu Client ID do Google"
-            />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Google OAuth Client Secret
-              </label>
-              <div className="relative">
-                <Input
-                  type={showGoogleSecret ? 'text' : 'password'}
-                  value={googleOAuth.clientSecret}
-                  onChange={(e) => handleGoogleChange('clientSecret', e.target.value)}
-                  placeholder="Deixe em branco para manter o secret atual"
-                  icon={Key}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowGoogleSecret(!showGoogleSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  {showGoogleSecret ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Dica: para salvar o secret, o backend precisa ter <span className="font-mono">ENCRYPTION_KEY</span> definido no <span className="font-mono">.env</span>.
-              </p>
-            </div>
-
-            <Input
-              label="Google Redirect URI"
-              value={googleOAuth.redirectUri}
-              onChange={(e) => handleGoogleChange('redirectUri', e.target.value)}
-              placeholder="http://localhost:5000/api/google/oauth/callback"
-            />
-
-            <div className="flex flex-col gap-3 pt-2">
-              <div className="flex items-center gap-3 flex-wrap">
-                <Badge variant={googleStatus.connected ? 'success' : 'default'} className="flex items-center gap-2 px-4 py-2">
-                  <Calendar size={16} />
-                  {googleStatus.connected ? 'Conectado' : 'Não conectado'}
-                </Badge>
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="flex items-center gap-2"
-                  onClick={handleConnectGoogle}
-                  disabled={loadingGoogle}
-                >
-                  <Calendar size={18} />
-                  Conectar Google
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex items-center gap-2"
-                  onClick={loadGoogleStatus}
-                  disabled={loadingGoogle}
-                >
-                  <RefreshCw size={18} />
-                  Atualizar status
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  className="flex items-center gap-2"
-                  onClick={handleDisconnectGoogle}
-                  disabled={loadingGoogle}
-                >
-                  <XCircle size={18} />
-                  Remover Credenciais
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Calendário padrão
+                    Modelo GPT
                   </label>
                   <select
-                    value={selectedCalendarId}
-                    onChange={(e) => setSelectedCalendarId(e.target.value)}
+                    value={config.model}
+                    onChange={(e) => handleChange('model', e.target.value)}
                     className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    disabled={loadingGoogle || !googleStatus.connected}
                   >
-                    <option value="">Selecione um calendário...</option>
-                    {googleCalendars.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.summary}{c.primary ? ' (principal)' : ''}
-                      </option>
-                    ))}
+                    <option value="gpt-4o-mini">GPT-4o Mini (Rápido e Econômico)</option>
+                    <option value="gpt-4o">GPT-4o (Mais Capaz)</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
                   </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Selecionado atualmente: {googleStatus.calendarIdDefault || '(nenhum)'}
-                  </p>
                 </div>
 
-                <div className="flex items-end gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="flex items-center gap-2 w-full justify-center"
-                    onClick={handleLoadCalendars}
-                    disabled={loadingGoogle || !googleStatus.connected}
-                  >
-                    <RefreshCw size={18} />
-                    Listar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex items-center gap-2 w-full justify-center"
-                    onClick={handleSelectCalendar}
-                    disabled={loadingGoogle || !googleStatus.connected || !selectedCalendarId}
-                  >
-                    <Save size={18} />
-                    Usar
-                  </Button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Temperatura ({config.temperature})
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={config.temperature}
+                    onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    0 = Focado e Determinístico | 1 = Criativo e Variado
+                  </p>
                 </div>
               </div>
+
+              <div>
+                <Input
+                  label="Máximo de Tokens"
+                  type="number"
+                  value={config.max_tokens}
+                  onChange={(e) => handleChange('max_tokens', parseInt(e.target.value))}
+                  min={50}
+                  max={2000}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Número máximo de tokens na resposta (50-2000)
+                </p>
+              </div>
+
+              {/* Botão Salvar OpenAI */}
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="flex items-center gap-2"
+                  disabled={savingOpenAI}
+                >
+                  <Save size={18} />
+                  {savingOpenAI ? 'Salvando...' : 'Salvar Configuração OpenAI'}
+                </Button>
+              </div>
             </div>
-          </div>
+          </form>
         </Card>
 
         {/* Card Sistema de Agendamento (Premium Shears) */}
         <Card title="Sistema de Agendamento" icon={Calendar}>
           <div className="space-y-4">
+            {/* Status do Scheduler */}
+            {schedulerStatus.configured && (
+              <div className="mb-2">
+                <Badge variant="success" className="flex items-center gap-2 w-fit">
+                  <CheckCircle size={14} />
+                  {schedulerStatus.message}
+                </Badge>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 URL da API do Premium Shears Scheduler
@@ -654,7 +474,7 @@ const APIManager = () => {
                 className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
               />
               <label htmlFor="use-premium-shears" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Usar Premium Shears Scheduler ao invés de Google Calendar
+                Usar Premium Shears Scheduler
               </label>
             </div>
 
@@ -686,40 +506,22 @@ const APIManager = () => {
               </p>
             </div>
 
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleSaveScheduler}
-              disabled={saving || loadingScheduler}
-              className="w-full"
-            >
-              <Save size={18} />
-              {saving ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
-            </Button>
+            {/* Botão Salvar Scheduler */}
+            <div className="flex justify-end pt-2">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSaveScheduler}
+                disabled={savingScheduler || loadingScheduler}
+                className="flex items-center gap-2"
+              >
+                <Save size={18} />
+                {savingScheduler ? 'Salvando...' : 'Salvar Configuração do Scheduler'}
+              </Button>
+            </div>
           </div>
         </Card>
-
-        {/* Save Button */}
-        <div className="flex justify-end gap-4">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={loadConfig}
-            disabled={saving}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            className="flex items-center gap-2"
-            disabled={saving}
-          >
-            <Save size={20} />
-            {saving ? 'Salvando...' : 'Salvar Configurações'}
-          </Button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 };
