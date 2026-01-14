@@ -1,4 +1,4 @@
-const googleCalendarOAuth = require('./google-calendar-oauth');
+const premiumShearsScheduler = require('./premium-shears-scheduler');
 const { query } = require('../config/database');
 const { supabase, isConfigured } = require('../config/supabase');
 
@@ -172,6 +172,28 @@ class BookingService {
     return Number.isFinite(n) && n > 0 ? n : 30;
   }
 
+  /**
+   * Busca configuração do scheduler e retorna o serviço correto
+   * Agora usa apenas Premium Shears (Google Calendar removido)
+   */
+  async getSchedulerService(userId) {
+    if (!userId) {
+      throw new Error('userId é obrigatório para usar Premium Shears Scheduler');
+    }
+
+    try {
+      const isConfigured = await premiumShearsScheduler.isConfiguredForUser(userId);
+      if (!isConfigured) {
+        throw new Error('Premium Shears Scheduler não configurado. Configure em Chaves e Integrações → Sistema de Agendamento.');
+      }
+      
+      return premiumShearsScheduler;
+    } catch (error) {
+      console.warn('⚠️ [getSchedulerService] Erro ao verificar configuração:', error.message);
+      throw error;
+    }
+  }
+
   reset(phone) {
     this.state.delete(phone);
   }
@@ -335,7 +357,8 @@ class BookingService {
         let calendarError = null;
         
         try {
-          appt = await googleCalendarOAuth.createAppointment({
+          const calendarService = await this.getSchedulerService(userId);
+          appt = await calendarService.createAppointment({
             userId,
             name: state.name || '',
             phone: cleanPhone,
@@ -344,14 +367,14 @@ class BookingService {
             durationMinutes: duration,
             notes: ''
           });
-          console.log(`✅ Agendamento criado no Google Calendar: ${appt.eventId || appt.id}`);
+          console.log(`✅ Agendamento criado no Premium Shears: ${appt.eventId || appt.id}`);
         } catch (err) {
-          console.error('❌ Erro ao criar agendamento no Google Calendar:', err.message);
+          console.error('❌ Erro ao criar agendamento no Premium Shears:', err.message);
           calendarError = err;
-          // Continuar para salvar no banco mesmo se Google Calendar falhar
+          // Continuar para salvar no banco mesmo se Premium Shears falhar
         }
 
-        // Salvar no banco de dados (mesmo se Google Calendar falhar)
+        // Salvar no banco de dados (mesmo se Premium Shears falhar)
         try {
           await this.saveAppointmentToDatabase({
             userId,
@@ -361,8 +384,9 @@ class BookingService {
             service: state.service || 'Agendamento',
             startTime: new Date(slot.startISO),
             endTime: new Date(new Date(slot.startISO).getTime() + duration * 60000),
-            googleCalendarEventId: appt?.eventId || appt?.id || null,
-            notes: calendarError ? `Erro ao criar no Google Calendar: ${calendarError.message}` : null
+            externalEventId: appt?.eventId || appt?.id || null,
+            schedulerType: 'premium_shears',
+            notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : null
           });
         } catch (dbError) {
           console.error('❌ Erro ao salvar agendamento no banco de dados:', dbError);
@@ -454,17 +478,18 @@ class BookingService {
 
     let isFree = false;
     try {
-      isFree = await googleCalendarOAuth.isSlotFree({ 
+      const calendarService = await this.getSchedulerService(userId);
+      isFree = await calendarService.isSlotFree({ 
         userId, 
         startISO: desired.toISOString(), 
         durationMinutes: duration,
         intervalMinutes: state.profileConfig?.intervalBetweenAppointmentsMinutes || 0
       });
     } catch (e) {
-      // Caso comum: usuário não conectou Google ou não selecionou calendário
+      // Caso comum: Premium Shears não configurado
       return {
         handled: true,
-        reply: `Para eu consultar horários e agendar, você precisa **conectar sua conta Google** no app e **selecionar um calendário**.\n\nDepois disso, me diga novamente: qual dia e horário você quer?`
+        reply: `Para eu consultar horários e agendar, você precisa **configurar o Sistema de Agendamento** em Chaves e Integrações.\n\nDepois disso, me diga novamente: qual dia e horário você quer?`
       };
     }
     if (isFree) {
@@ -472,7 +497,8 @@ class BookingService {
       let calendarError = null;
       
       try {
-        appt = await googleCalendarOAuth.createAppointment({
+        const calendarService = await this.getSchedulerService(userId);
+        appt = await calendarService.createAppointment({
           userId,
           name: state.name,
           phone: cleanPhone,
@@ -482,14 +508,14 @@ class BookingService {
           intervalMinutes: state.profileConfig?.intervalBetweenAppointmentsMinutes || 0,
           notes: ''
         });
-        console.log(`✅ Agendamento criado no Google Calendar: ${appt.eventId || appt.id}`);
+        console.log(`✅ Agendamento criado no Premium Shears: ${appt.eventId || appt.id}`);
       } catch (err) {
-        console.error('❌ Erro ao criar agendamento no Google Calendar:', err.message);
+        console.error('❌ Erro ao criar agendamento no Premium Shears:', err.message);
         calendarError = err;
-        // Continuar para salvar no banco mesmo se Google Calendar falhar
+        // Continuar para salvar no banco mesmo se Premium Shears falhar
       }
       
-      // Salvar no banco de dados (mesmo se Google Calendar falhar)
+      // Salvar no banco de dados (mesmo se Premium Shears falhar)
       try {
         await this.saveAppointmentToDatabase({
           userId,
@@ -499,8 +525,9 @@ class BookingService {
           service: state.service,
           startTime: desired,
           endTime: new Date(desired.getTime() + duration * 60000),
-          googleCalendarEventId: appt?.eventId || appt?.id || null,
-          notes: calendarError ? `Erro ao criar no Google Calendar: ${calendarError.message}` : null
+          externalEventId: appt?.eventId || appt?.id || null,
+          schedulerType: 'premium_shears',
+          notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : null
         });
       } catch (dbError) {
         console.error('❌ Erro ao salvar agendamento no banco de dados:', dbError);
@@ -519,7 +546,8 @@ class BookingService {
     const { start, end } = getOpenClose(state.dateOnly);
     let slots = [];
     try {
-      slots = await googleCalendarOAuth.getAvailableSlots({
+      const calendarService = await this.getSchedulerService(userId);
+      slots = await calendarService.getAvailableSlots({
         userId,
         fromISO: start.toISOString(),
         toISO: end.toISOString(),
@@ -529,7 +557,7 @@ class BookingService {
     } catch (e) {
       return {
         handled: true,
-        reply: `Para eu sugerir horários disponíveis, você precisa **conectar sua conta Google** no app e **selecionar um calendário**.\n\nQuer que eu te diga onde fica essa opção no painel?`
+        reply: `Para eu sugerir horários disponíveis, você precisa **configurar o Sistema de Agendamento** em Chaves e Integrações.\n\nQuer que eu te diga onde fica essa opção no painel?`
       };
     }
 
@@ -609,7 +637,7 @@ class BookingService {
         duration
       });
 
-      // Criar evento no Google Calendar
+      // Criar evento no Premium Shears
       // Se o horário solicitado estiver ocupado, tentar horários alternativos automaticamente
       let appt = null;
       let calendarError = null;
@@ -622,7 +650,8 @@ class BookingService {
 
       try {
         console.log(`📅 [createAppointmentFromAI] Tentando criar agendamento no horário solicitado...`);
-        appt = await googleCalendarOAuth.createAppointment({
+        const calendarService = await this.getSchedulerService(userId);
+        appt = await calendarService.createAppointment({
           userId,
           name: clientName,
           phone: cleanPhone,
@@ -632,7 +661,7 @@ class BookingService {
           intervalMinutes: Number.isFinite(intervalMinutes) && intervalMinutes >= 0 ? intervalMinutes : 0,
           notes: notes
         });
-        console.log(`✅ [createAppointmentFromAI] Agendamento criado no Google Calendar:`, {
+        console.log(`✅ [createAppointmentFromAI] Agendamento criado no Premium Shears:`, {
           eventId: appt.eventId || appt.id,
           htmlLink: appt.htmlLink?.substring(0, 80)
         });
@@ -705,7 +734,8 @@ class BookingService {
             try {
               attemptsCount++;
               console.log(`🔄 [createAppointmentFromAI] Tentativa ${attemptsCount}/${alternativeOffsets.length}: ${alternativeTime.toLocaleString('pt-BR')}...`);
-              appt = await googleCalendarOAuth.createAppointment({
+              const calendarService = await this.getSchedulerService(userId);
+              appt = await calendarService.createAppointment({
                 userId,
                 name: clientName,
                 phone: cleanPhone,
@@ -757,7 +787,7 @@ class BookingService {
           }
         } else {
           // Outro tipo de erro
-          console.error('❌ [createAppointmentFromAI] Erro ao criar agendamento no Google Calendar:', {
+          console.error('❌ [createAppointmentFromAI] Erro ao criar agendamento no Premium Shears:', {
             message: err.message,
             statusCode: err.statusCode,
             stack: err.stack?.substring(0, 200)
@@ -771,7 +801,7 @@ class BookingService {
       try {
         const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
         const duplicateCheck = await query(
-          `SELECT id, google_calendar_event_id, start_time, status
+          `SELECT id, external_event_id, start_time, status
            FROM booking_appointments
            WHERE user_id = $1 
              AND phone = $2 
@@ -786,16 +816,17 @@ class BookingService {
           const duplicate = duplicateCheck.rows[0];
           console.log(`⚠️ [createAppointmentFromAI] Agendamento duplicado detectado:`, {
             duplicateId: duplicate.id,
-            existingEventId: duplicate.google_calendar_event_id?.substring(0, 30),
+            existingEventId: duplicate.external_event_id?.substring(0, 30),
             existingTime: new Date(duplicate.start_time).toLocaleString('pt-BR'),
             newTime: finalStartTime.toLocaleString('pt-BR')
           });
 
-          // Se o novo agendamento foi criado no Google Calendar, cancelar o anterior
-          if (appt && appt.eventId && duplicate.google_calendar_event_id) {
+          // Se o novo agendamento foi criado no Premium Shears, cancelar o anterior
+          if (appt && appt.eventId && duplicate.external_event_id) {
             try {
-              await googleCalendarOAuth.deleteAppointment({ userId, eventId: duplicate.google_calendar_event_id });
-              console.log(`✅ [createAppointmentFromAI] Agendamento anterior cancelado no Google Calendar`);
+              const calendarService = await this.getSchedulerService(userId);
+              await calendarService.deleteAppointment({ userId, eventId: duplicate.external_event_id });
+              console.log(`✅ [createAppointmentFromAI] Agendamento anterior cancelado no Premium Shears`);
             } catch (delError) {
               console.warn(`⚠️ [createAppointmentFromAI] Erro ao cancelar agendamento anterior:`, delError.message);
             }
@@ -816,13 +847,13 @@ class BookingService {
       }
 
       // Salvar no banco de dados
-      // IMPORTANTE: Se o evento foi criado no Google Calendar, SEMPRE salvar no banco com o eventId
+      // IMPORTANTE: Se o evento foi criado no Premium Shears, SEMPRE salvar no banco com o eventId
       const finalEndTime = new Date(finalStartTime.getTime() + duration * 60000);
       const eventIdToSave = appt?.eventId || appt?.id || null;
       
-      // Se criou no Google Calendar mas não tem eventId, isso é um erro crítico
+      // Se criou no Premium Shears mas não tem eventId, isso é um erro crítico
       if (appt && !eventIdToSave) {
-        console.error('❌ [createAppointmentFromAI] CRÍTICO: Evento criado no Google Calendar mas sem eventId!', appt);
+        console.error('❌ [createAppointmentFromAI] CRÍTICO: Evento criado no Premium Shears mas sem eventId!', appt);
       }
       
       try {
@@ -840,8 +871,9 @@ class BookingService {
           service: service,
           startTime: finalStartTime,
           endTime: finalEndTime,
-          googleCalendarEventId: eventIdToSave,
-          notes: calendarError ? `Erro ao criar no Google Calendar: ${calendarError.message}` : notes
+          externalEventId: eventIdToSave,
+          schedulerType: 'premium_shears',
+          notes: calendarError ? `Erro ao criar no Premium Shears: ${calendarError.message}` : notes
         });
         
         console.log(`✅ [createAppointmentFromAI] Agendamento salvo no banco de dados`, {
@@ -855,12 +887,12 @@ class BookingService {
           eventId: eventIdToSave?.substring(0, 30)
         });
         
-        // Se o evento foi criado no Google Calendar mas falhou ao salvar no banco,
-        // isso é crítico - o evento ficará órfão no calendário
+        // Se o evento foi criado no Premium Shears mas falhou ao salvar no banco,
+        // isso é crítico - o evento ficará órfão no sistema
         if (eventIdToSave) {
-          console.error('⚠️ [createAppointmentFromAI] ATENÇÃO: Evento criado no Google Calendar mas não salvo no banco!');
+          console.error('⚠️ [createAppointmentFromAI] ATENÇÃO: Evento criado no Premium Shears mas não salvo no banco!');
           console.error('   EventId:', eventIdToSave);
-          console.error('   Isso pode causar inconsistência entre calendário e banco de dados.');
+          console.error('   Isso pode causar inconsistência entre sistema e banco de dados.');
         }
         
         return { success: false, error: `Erro ao salvar agendamento no banco de dados: ${dbError.message}` };
@@ -886,12 +918,12 @@ class BookingService {
         hasEventId: !!(appt?.eventId || appt?.id)
       });
 
-      // Se não conseguiu criar no Google Calendar, retornar erro
+      // Se não conseguiu criar no Premium Shears, retornar erro
       if (!result.success && !calendarError) {
-        console.error('❌ [createAppointmentFromAI] Agendamento não foi criado no Google Calendar e não há erro registrado!');
+        console.error('❌ [createAppointmentFromAI] Agendamento não foi criado no Premium Shears e não há erro registrado!');
         return { 
           success: false, 
-          error: 'Falha ao criar agendamento no Google Calendar. Tente novamente.',
+          error: 'Falha ao criar agendamento no Premium Shears. Tente novamente.',
           calendarError: 'Erro desconhecido ao criar evento'
         };
       }
@@ -924,7 +956,7 @@ class BookingService {
 
       // Buscar agendamentos futuros do cliente
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id
+        `SELECT id, client_name, service, start_time, end_time, status, external_event_id
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW()
          ORDER BY start_time ASC
@@ -946,7 +978,7 @@ class BookingService {
           time: start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           endTime: end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           status: apt.status,
-          eventId: apt.google_calendar_event_id
+          eventId: apt.external_event_id
         };
       });
 
@@ -991,7 +1023,7 @@ class BookingService {
 
       // Buscar agendamentos futuros primeiro
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id
+        `SELECT id, client_name, service, start_time, end_time, status, external_event_id
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW() AND status = 'confirmed'
          ORDER BY start_time ASC
@@ -1050,7 +1082,7 @@ class BookingService {
       // Cancelar o agendamento selecionado
       const appointment = result.rows[appointmentIndex];
       const appointmentId = appointment.id;
-      const eventId = appointment.google_calendar_event_id;
+      const eventId = appointment.external_event_id;
 
       console.log(`🗑️ [handleCancelAppointment] Cancelando agendamento:`, {
         appointmentId,
@@ -1058,14 +1090,15 @@ class BookingService {
         service: appointment.service
       });
 
-      // Deletar do Google Calendar se tiver eventId
+      // Deletar do Premium Shears se tiver eventId
       if (eventId) {
         try {
-          await googleCalendarOAuth.deleteAppointment({ userId, eventId });
-          console.log(`✅ [handleCancelAppointment] Evento deletado do Google Calendar`);
+          const calendarService = await this.getSchedulerService(userId);
+          await calendarService.deleteAppointment({ userId, eventId });
+          console.log(`✅ [handleCancelAppointment] Evento deletado do Premium Shears`);
         } catch (calendarError) {
-          console.error('⚠️ [handleCancelAppointment] Erro ao deletar do Google Calendar:', calendarError.message);
-          // Continuar mesmo se falhar no Google Calendar
+          console.error('⚠️ [handleCancelAppointment] Erro ao deletar do Premium Shears:', calendarError.message);
+          // Continuar mesmo se falhar no Premium Shears
         }
       }
 
@@ -1119,7 +1152,7 @@ class BookingService {
 
       // Buscar agendamentos futuros
       const result = await query(
-        `SELECT id, client_name, service, start_time, end_time, status, google_calendar_event_id
+        `SELECT id, client_name, service, start_time, end_time, status, external_event_id
          FROM booking_appointments
          WHERE user_id = $1 AND phone = $2 AND start_time >= NOW() AND status = 'confirmed'
          ORDER BY start_time ASC
@@ -1149,26 +1182,33 @@ class BookingService {
   /**
    * Salva agendamento no banco de dados (Supabase ou PostgreSQL)
    */
-  async saveAppointmentToDatabase({ userId, profileId, phone, clientName, service, startTime, endTime, googleCalendarEventId, notes = null }) {
+  async saveAppointmentToDatabase({ userId, profileId, phone, clientName, service, startTime, endTime, externalEventId = null, schedulerType = 'premium_shears', notes = null }) {
     try {
       const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
       
       // Salvar no Supabase primeiro (se configurado)
       if (isConfigured && supabase) {
+        const insertData = {
+          user_id: userId,
+          profile_id: profileId || null,
+          phone: cleanPhone,
+          client_name: clientName || null,
+          service: service || null,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          status: 'confirmed',
+          scheduler_type: schedulerType,
+          notes: notes || null
+        };
+
+        // Adicionar ID externo
+        if (externalEventId) {
+          insertData.external_event_id = String(externalEventId);
+        }
+
         const { error } = await supabase
           .from('booking_appointments')
-          .insert([{
-            user_id: userId,
-            profile_id: profileId || null,
-            phone: cleanPhone,
-            client_name: clientName || null,
-            service: service || null,
-            start_time: startTime.toISOString(),
-            end_time: endTime.toISOString(),
-            status: 'confirmed',
-            google_calendar_event_id: googleCalendarEventId || null,
-            notes: notes || null
-          }]);
+          .insert([insertData]);
 
         if (!error) {
           console.log(`✅ Agendamento salvo no Supabase: ${cleanPhone} - ${service} - ${startTime.toISOString()}`);
@@ -1183,9 +1223,9 @@ class BookingService {
       await query(
         `INSERT INTO booking_appointments (
           user_id, profile_id, phone, client_name, service,
-          start_time, end_time, status, google_calendar_event_id, notes,
+          start_time, end_time, status, external_event_id, scheduler_type, notes,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [
           userId,
           profileId || null,
@@ -1195,7 +1235,8 @@ class BookingService {
           startTime,
           endTime,
           'confirmed',
-          googleCalendarEventId || null,
+          externalEventId ? String(externalEventId) : null,
+          schedulerType,
           notes || null
         ]
       );
