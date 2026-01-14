@@ -86,16 +86,26 @@ async function apiRequest(userId, method, endpoint, body = null) {
     throw err;
   }
 
-  // Remover /api do final da URL base se existir, pois os endpoints já incluem /api
-  // Mas na verdade, a URL base já termina com /api, então os endpoints devem começar sem /api
+  // Normalizar URL base: remover barra final e /api se existir
   let baseUrl = config.apiUrl.replace(/\/$/, '');
+  
   // Se a URL base termina com /api, remover para evitar duplicação
+  // Exemplo: https://xxx.supabase.co/functions/v1/api -> https://xxx.supabase.co/functions/v1
   if (baseUrl.endsWith('/api')) {
     baseUrl = baseUrl.replace(/\/api$/, '');
   }
-  // Garantir que o endpoint começa com /
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${baseUrl}${cleanEndpoint}`;
+  
+  // Garantir que o endpoint começa com / e não tem /api no início
+  let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  // Se o endpoint começa com /api, remover (já está na URL base)
+  if (cleanEndpoint.startsWith('/api/')) {
+    cleanEndpoint = cleanEndpoint.replace(/^\/api/, '');
+  }
+  
+  // Construir URL final: baseUrl + /api + endpoint
+  // Exemplo: https://xxx.supabase.co/functions/v1 + /api + /appointments
+  const url = `${baseUrl}/api${cleanEndpoint}`;
   const headers = {
     'Content-Type': 'application/json'
   };
@@ -195,6 +205,7 @@ module.exports = {
       notes: notes || null
     };
 
+    // Endpoint sem /api no início, pois a função apiRequest já trata isso
     const response = await apiRequest(userId, 'POST', '/appointments', body);
 
     return {
